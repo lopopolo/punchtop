@@ -1,0 +1,8 @@
+[package]
+name = "punchtop"
+version = "0.1.0"
+authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
+
+[dependencies]
+rodio = "*"
+walkdir = "2"
