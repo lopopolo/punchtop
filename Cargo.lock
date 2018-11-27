@@ -345,6 +345,7 @@ dependencies = [
 name = "punchtop"
 version = "0.1.0"
 dependencies = [
+ "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "rodio 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

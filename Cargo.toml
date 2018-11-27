@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
 [dependencies]
+rand = "*"
 rodio = "*"
 walkdir = "2"
