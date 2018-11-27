@@ -1,3 +1,4 @@
+extern crate mp3_duration;
 extern crate rand;
 extern crate walkdir;
 
@@ -44,11 +45,18 @@ pub struct Playlist {
 impl Playlist {
     pub fn from_directory(dir: &Path, config: Config) -> Self {
         let mut vec = Vec::new();
+        let track_duration = config.duration;
         let walker = WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
-            .filter(|e| is_music(e));
+            .filter(|e| is_music(e))
+            .filter(|e| {
+                mp3_duration::from_path(e.path())
+                    .ok()
+                    .and_then(|duration| duration.checked_sub(track_duration))
+                    .map_or(false, |_| true)
+            });
         for entry in walker {
             vec.push(PathBuf::from(entry.path()));
         }

@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
 [dependencies]
+mp3-duration = "*"
 rand = "*"
 rodio = "*"
 walkdir = "2"
