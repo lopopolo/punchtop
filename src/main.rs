@@ -1,4 +1,10 @@
+#![feature(inner_deref)]
+
+extern crate mp3_duration;
+extern crate rand;
 extern crate rodio;
+extern crate taglib;
+extern crate walkdir;
 
 mod playlist;
 
@@ -13,7 +19,21 @@ fn main() {
     let playlist =
         playlist::Playlist::from_directory(Path::new("/Users/lopopolo/Downloads/test"), config);
     for track in playlist {
-        sink.append(track);
+        match (track.metadata.artist(), track.metadata.album(), track.metadata.title()) {
+            (Some(artist), Some(album), Some(title)) => {
+                println!("{}", title);
+                println!("{} -- {}", artist, album);
+            },
+            (Some(artist), None, Some(title)) => {
+                println!("{}", title);
+                println!("{}", artist);
+            },
+            (None, None, Some(title)) => {
+                println!("{}", title);
+            },
+            _ => (),
+        }
+        sink.append(track.stream());
         sink.sleep_until_end();
     }
 }

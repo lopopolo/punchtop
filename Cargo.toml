@@ -7,4 +7,5 @@ authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 mp3-duration = "*"
 rand = "*"
 rodio = "*"
+taglib = "*"
 walkdir = "2"
