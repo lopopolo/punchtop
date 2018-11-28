@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::ops::Deref;
 use std::path::Path;
-use std::sync::{RwLock, Arc};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -39,7 +39,10 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, ChromecastConfig>>>) {
         for response in mdns::discover::all(SERVICE_NAME).unwrap() {
             let response = response.unwrap();
 
-            let mut config = ChromecastConfig { addr: None, txt: HashMap::new() };
+            let mut config = ChromecastConfig {
+                addr: None,
+                txt: HashMap::new(),
+            };
             for record in response.records() {
                 match record.kind {
                     RecordKind::A(addr) => config.addr = Some(addr.into()),
@@ -47,7 +50,7 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, ChromecastConfig>>>) {
                     RecordKind::TXT(ref text) => {
                         let refs: Vec<&str> = text.iter().map(|s| s.deref()).collect();
                         config.txt = parser::dns_txt(&refs);
-                    },
+                    }
                     _ => (),
                 }
             }
@@ -72,18 +75,22 @@ fn main() {
     let playlist =
         playlist::Playlist::from_directory(Path::new("/Users/lopopolo/Downloads/test"), config);
     for track in playlist {
-        match (track.metadata.artist(), track.metadata.album(), track.metadata.title()) {
+        match (
+            track.metadata.artist(),
+            track.metadata.album(),
+            track.metadata.title(),
+        ) {
             (Some(artist), Some(album), Some(title)) => {
                 println!("{}", title);
                 println!("{} -- {}", artist, album);
-            },
+            }
             (Some(artist), None, Some(title)) => {
                 println!("{}", title);
                 println!("{}", artist);
-            },
+            }
             (None, None, Some(title)) => {
                 println!("{}", title);
-            },
+            }
             _ => (),
         }
         if let Ok(map) = registry.read() {

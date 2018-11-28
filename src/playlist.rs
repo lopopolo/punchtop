@@ -1,5 +1,5 @@
-use rand::thread_rng;
 use rand::seq::SliceRandom;
+use rand::thread_rng;
 use rodio::{decoder, source, Source};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
@@ -47,9 +47,17 @@ impl Metadata {
                 let artist = tag.as_ref().and_then(|t| t.artist());
                 let album = tag.as_ref().and_then(|t| t.album());
                 let title = tag.as_ref().and_then(|t| t.title());
-                Metadata { artist, album, title }
+                Metadata {
+                    artist,
+                    album,
+                    title,
+                }
+            }
+            Err(_) => Metadata {
+                artist: None,
+                album: None,
+                title: None,
             },
-            Err(_) => Metadata { artist: None, album: None, title: None },
         }
     }
 
@@ -66,7 +74,6 @@ impl Metadata {
     }
 }
 
-
 pub struct Track {
     path: PathBuf,
     duration: Duration,
@@ -74,13 +81,15 @@ pub struct Track {
 }
 
 impl Track {
-    pub fn stream(self) -> source::TakeDuration<source::Buffered<decoder::Decoder<BufReader<File>>>> {
+    pub fn stream(
+        self,
+    ) -> source::TakeDuration<source::Buffered<decoder::Decoder<BufReader<File>>>> {
         File::open(self.path.as_os_str())
-                .ok()
-                .and_then(|f| rodio::Decoder::new(BufReader::new(f)).ok())
-                .map(|s| s.buffered())
-                .map(|s| s.take_duration(self.duration))
-                .unwrap()
+            .ok()
+            .and_then(|f| rodio::Decoder::new(BufReader::new(f)).ok())
+            .map(|s| s.buffered())
+            .map(|s| s.take_duration(self.duration))
+            .unwrap()
     }
 }
 
@@ -129,13 +138,11 @@ impl Iterator for Playlist {
         }
         if let Some(p) = self.tracks.pop_front() {
             println!("{:?}", p);
-            Some(
-                Track {
-                    path: p.to_path_buf(),
-                    duration: self.config.duration,
-                    metadata: Metadata::new(&p)
-                }
-            )
+            Some(Track {
+                path: p.to_path_buf(),
+                duration: self.config.duration,
+                metadata: Metadata::new(&p),
+            })
         } else {
             None
         }
