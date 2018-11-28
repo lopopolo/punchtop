@@ -4,7 +4,9 @@ version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
 [dependencies]
+mdns = "*"
 mp3-duration = "*"
+nom = "4"
 rand = "*"
 rodio = "*"
 taglib = "*"
