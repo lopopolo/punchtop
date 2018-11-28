@@ -21,7 +21,7 @@ use std::sync::{RwLock, Arc};
 use std::thread;
 use std::time::Duration;
 
-const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
+const SERVICE_NAME: &str = "_googlecast._tcp.local";
 
 struct ChromecastConfig {
     addr: Option<IpAddr>,
@@ -45,18 +45,17 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, ChromecastConfig>>>) {
                     RecordKind::A(addr) => config.addr = Some(addr.into()),
                     RecordKind::AAAA(addr) => config.addr = Some(addr.into()),
                     RecordKind::TXT(ref text) => {
-                        let refs = text.iter().map(|s| s.deref()).collect();
-                        config.txt = parser::dns_txt(refs);
+                        let refs: Vec<&str> = text.iter().map(|s| s.deref()).collect();
+                        config.txt = parser::dns_txt(&refs);
                     },
                     _ => (),
                 }
             }
             let name = config.name().map(String::from);
             if let Some(name) = name {
-                match registry.write() {
-                    Ok(mut map) => map.insert(name, config),
-                    _ => None,
-                };
+                if let Ok(mut map) = registry.write() {
+                    map.insert(name, config);
+                }
             }
         }
     });
@@ -87,10 +86,9 @@ fn main() {
             },
             _ => (),
         }
-        match registry.read() {
-            Ok(map) => println!("{:?}", map.keys()),
-            _ => (),
-        };
+        if let Ok(map) = registry.read() {
+            println!("{:?}", map.keys());
+        }
         sink.append(track.stream());
         sink.sleep_until_end();
     }

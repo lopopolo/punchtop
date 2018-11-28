@@ -6,7 +6,7 @@ use nom::types::CompleteByteSlice;
 use std::str;
 use std::collections::HashMap;
 
-fn complete_byte_slice_to_str<'a>(s: CompleteByteSlice<'a>) -> Result<&'a str, str::Utf8Error> {
+fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, str::Utf8Error> {
   str::from_utf8(s.0)
 }
 
@@ -23,7 +23,7 @@ named!(key_value<CompleteByteSlice, (&str, &str)>,
 );
 
 // TXT records are given as a Vec of key=value pairs
-pub fn dns_txt(vec: Vec<&str>) -> HashMap<String, String> {
+pub fn dns_txt(vec: &[&str]) -> HashMap<String, String> {
     let mut collect: HashMap<String, String> = HashMap::new();
     for txt in vec.iter() {
         match key_value(CompleteByteSlice(txt.as_bytes())) {
