@@ -1,4 +1,5 @@
-use rand::Rng;
+use rand::thread_rng;
+use rand::seq::SliceRandom;
 use rodio::{decoder, source, Source};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
@@ -107,7 +108,9 @@ impl Playlist {
         for entry in walker {
             vec.push(PathBuf::from(entry.path()));
         }
-        rand::thread_rng().shuffle(&mut vec);
+
+        let mut rng = thread_rng();
+        vec.shuffle(&mut rng);
 
         Playlist {
             tracks: VecDeque::from(vec),
