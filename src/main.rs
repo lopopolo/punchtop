@@ -9,67 +9,15 @@ extern crate rodio;
 extern crate taglib;
 extern crate walkdir;
 
-mod parser;
+mod backend;
 mod playlist;
 
-use mdns::RecordKind;
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::ops::Deref;
+use backend::{local,BackendDevice};
 use std::path::Path;
-use std::sync::{Arc, RwLock};
-use std::thread;
 use std::time::Duration;
 
-const SERVICE_NAME: &str = "_googlecast._tcp.local";
-
-struct ChromecastConfig {
-    addr: Option<IpAddr>,
-    txt: HashMap<String, String>,
-}
-
-impl ChromecastConfig {
-    pub fn name(&self) -> Option<&str> {
-        self.txt.get("fn").map(|n| n.deref())
-    }
-}
-
-fn spawn_mdns(registry: Arc<RwLock<HashMap<String, ChromecastConfig>>>) {
-    thread::spawn(move || {
-        for response in mdns::discover::all(SERVICE_NAME).unwrap() {
-            let response = response.unwrap();
-
-            let mut config = ChromecastConfig {
-                addr: None,
-                txt: HashMap::new(),
-            };
-            for record in response.records() {
-                match record.kind {
-                    RecordKind::A(addr) => config.addr = Some(addr.into()),
-                    RecordKind::AAAA(addr) => config.addr = Some(addr.into()),
-                    RecordKind::TXT(ref text) => {
-                        let refs: Vec<&str> = text.iter().map(|s| s.deref()).collect();
-                        config.txt = parser::dns_txt(&refs);
-                    }
-                    _ => (),
-                }
-            }
-            let name = config.name().map(String::from);
-            if let Some(name) = name {
-                if let Ok(mut map) = registry.write() {
-                    map.insert(name, config);
-                }
-            }
-        }
-    });
-}
-
 fn main() {
-    let registry = Arc::new(RwLock::new(HashMap::new()));
-    spawn_mdns(Arc::clone(&registry));
-
-    let device = rodio::default_output_device().unwrap();
-    let sink = rodio::Sink::new(&device);
+    let backend = local::BackendDevice::new();
 
     let config = playlist::Config::new(Duration::new(5, 0), 10);
     let playlist =
@@ -93,10 +41,11 @@ fn main() {
             }
             _ => (),
         }
-        if let Ok(map) = registry.read() {
-            println!("{:?}", map.keys());
+        if let Ok(ref sink) = backend {
+            match sink.play(&track.path, track.duration) {
+                Err(_) => continue,
+                _ => (),
+            };
         }
-        sink.append(track.stream());
-        sink.sleep_until_end();
     }
 }

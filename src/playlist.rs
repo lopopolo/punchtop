@@ -1,10 +1,7 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rodio::{decoder, source, Source};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
@@ -75,22 +72,9 @@ impl Metadata {
 }
 
 pub struct Track {
-    path: PathBuf,
-    duration: Duration,
+    pub path: PathBuf,
+    pub duration: Duration,
     pub metadata: Metadata,
-}
-
-impl Track {
-    pub fn stream(
-        self,
-    ) -> source::TakeDuration<source::Buffered<decoder::Decoder<BufReader<File>>>> {
-        File::open(self.path.as_os_str())
-            .ok()
-            .and_then(|f| rodio::Decoder::new(BufReader::new(f)).ok())
-            .map(|s| s.buffered())
-            .map(|s| s.take_duration(self.duration))
-            .unwrap()
-    }
 }
 
 pub struct Playlist {
