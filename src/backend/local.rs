@@ -13,7 +13,9 @@ pub struct BackendDevice {
 impl BackendDevice {
     pub fn new<'a>() -> Result<Self, Error<'a>> {
         rodio::default_output_device()
-            .map(|device| BackendDevice { sink: Sink::new(&device) })
+            .map(|device| BackendDevice {
+                sink: Sink::new(&device),
+            })
             .ok_or(Error::BackendNotInitialized)
     }
 }

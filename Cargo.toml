@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
 [dependencies]
+lazy_static = "*"
 mdns = "*"
 mp3-duration = "*"
 nom = "4"

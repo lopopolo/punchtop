@@ -12,6 +12,10 @@ use std::time::Duration;
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
 const CHROMECAST_NAME_KEY: &str = "fn";
 
+lazy_static! {
+    static ref DISCOVERY: Discovery = Discovery::new();
+}
+
 struct Config {
     pub addr: IpAddr,
     txt: HashMap<String, String>,
@@ -38,19 +42,21 @@ pub struct Discovery {
 }
 
 impl Discovery {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let registry = Arc::new(RwLock::new(HashMap::new()));
         spawn_mdns(Arc::clone(&registry));
         Discovery { registry }
     }
 
-    pub fn poll(&self) -> Vec<String> {
-        self.registry.read()
+    pub fn poll() -> Vec<String> {
+        DISCOVERY
+            .registry
+            .read()
             .map(|map| map.keys().map(|name| name.to_owned()).collect())
             .unwrap_or_else(|_| vec![])
     }
 
-    pub fn backend(&self, name: &str) -> Option<impl backend::BackendDevice> {
+    pub fn backend(name: &str) -> Option<impl backend::BackendDevice> {
         let d: Option<BackendDevice> = None;
         d
     }

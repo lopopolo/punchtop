@@ -1,5 +1,7 @@
 #![feature(inner_deref)]
 
+#[macro_use]
+extern crate lazy_static;
 extern crate mdns;
 extern crate mp3_duration;
 #[macro_use]
@@ -12,12 +14,19 @@ extern crate walkdir;
 mod backend;
 mod playlist;
 
-use backend::{local,BackendDevice};
+use backend::{chromecast, local, BackendDevice};
 use std::path::Path;
 use std::time::Duration;
 
 fn main() {
     let backend = local::BackendDevice::new();
+    loop {
+        let chromecasts = chromecast::Discovery::poll();
+        if chromecasts.len() >= 3 {
+            println!("{:?}", chromecasts);
+            break;
+        }
+    }
 
     let config = playlist::Config::new(Duration::new(5, 0), 10);
     let playlist =
@@ -42,10 +51,9 @@ fn main() {
             _ => (),
         }
         if let Ok(ref sink) = backend {
-            match sink.play(&track.path, track.duration) {
-                Err(_) => continue,
-                _ => (),
-            };
+            if sink.play(&track.path, track.duration).is_err() {
+                continue;
+            }
         }
     }
 }
