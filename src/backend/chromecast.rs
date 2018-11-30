@@ -91,24 +91,17 @@ mod parser {
     extern crate nom;
 
     use nom::alphanumeric;
-    use nom::types::CompleteByteSlice;
+    use nom::types::CompleteStr;
 
     use std::collections::HashMap;
     use std::str;
 
-    fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, str::Utf8Error> {
-        str::from_utf8(s.0)
-    }
-
-    named!(key_value<CompleteByteSlice, (&str, &str)>,
+    named!(key_value<CompleteStr, (CompleteStr, CompleteStr)>,
       do_parse!(
-          key: map_res!(alphanumeric, complete_byte_slice_to_str)
+          key: alphanumeric
       >>       char!('=')
-      >>  val: map_res!(
-               take_while!(call!(|_| true)),
-               complete_byte_slice_to_str
-             )
-      >>     (key, val)
+      >>  val: take_while!(call!(|_| true))
+      >>       (key, val)
       )
     );
 
@@ -116,8 +109,11 @@ mod parser {
     pub fn dns_txt<T: AsRef<str>>(vec: &[T]) -> HashMap<String, String> {
         let mut collect: HashMap<String, String> = HashMap::new();
         for txt in vec.iter() {
-            match key_value(CompleteByteSlice(txt.as_ref().as_bytes())) {
-                Ok((_, (key, value))) => collect.insert(key.to_owned(), value.to_owned()),
+            match key_value(CompleteStr(txt.as_ref())) {
+                Ok((_, (key, value))) => collect.insert(
+                    key.as_ref().to_owned(),
+                    value.as_ref().to_owned()
+                ),
                 _ => None,
             };
         }
