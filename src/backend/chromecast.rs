@@ -118,4 +118,14 @@ mod parser {
         }
         collect
     }
+
+    #[test]
+    fn parse_dns_txt() {
+        let parsed = dns_txt(&vec!["fn=Device Name=Bob's", "md=Chromecast"]);
+        let name = parsed.get("fn").unwrap();
+        let model = parsed.get("md").unwrap();
+        assert_eq!("Device Name=Bob's", name);
+        assert_eq!("Chromecast", model);
+        assert_eq!(None, parsed.get("none"));
+    }
 }
