@@ -98,10 +98,10 @@ mod parser {
 
     named!(key_value<CompleteStr, (CompleteStr, CompleteStr)>,
       do_parse!(
-          key: alphanumeric
-      >>       char!('=')
-      >>  val: take_while!(call!(|_| true))
-      >>       (key, val)
+          key: alphanumeric >>
+          char!('=') >>
+          val: take_while!(call!(|_| true)) >>
+          (key, val)
       )
     );
 
