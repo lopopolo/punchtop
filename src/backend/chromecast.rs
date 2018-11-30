@@ -97,12 +97,12 @@ mod parser {
     use std::str;
 
     named!(key_value<CompleteStr, (CompleteStr, CompleteStr)>,
-      do_parse!(
-          key: alphanumeric >>
-          char!('=') >>
-          val: take_while!(call!(|_| true)) >>
-          (key, val)
-      )
+    do_parse!(
+        key: alphanumeric >>
+        char!('=') >>
+        val: take_while!(call!(|_| true)) >>
+        (key, val)
+    )
     );
 
     /// TXT records are given as a Vec of key=value pairs
