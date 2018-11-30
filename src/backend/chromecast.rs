@@ -32,7 +32,7 @@ pub struct BackendDevice {
 }
 
 impl backend::BackendDevice for BackendDevice {
-    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
+    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
         Ok(())
     }
 }

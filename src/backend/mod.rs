@@ -13,5 +13,5 @@ pub enum Error<'a> {
 pub trait BackendDevice {
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and stop playing the media.
-    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>>;
+    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>>;
 }

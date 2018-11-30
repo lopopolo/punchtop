@@ -21,9 +21,9 @@ impl BackendDevice {
 }
 
 impl backend::BackendDevice for BackendDevice {
-    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
+    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
         File::open(path)
-            .map_err(|_| Error::CannotLoadMedia(path))
+            .map_err(|_| Error::CannotLoadMedia(path.as_ref()))
             .and_then(|f| Decoder::new(BufReader::new(f)).map_err(|_| Error::PlaybackFailed))
             .map(|source| source.buffered())
             .map(|source| source.take_duration(duration))
