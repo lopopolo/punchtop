@@ -110,10 +110,9 @@ mod parser {
         let mut collect: HashMap<String, String> = HashMap::new();
         for txt in vec.iter() {
             match key_value(CompleteStr(txt.as_ref())) {
-                Ok((_, (key, value))) => collect.insert(
-                    key.as_ref().to_owned(),
-                    value.as_ref().to_owned()
-                ),
+                Ok((_, (key, value))) => {
+                    collect.insert(key.as_ref().to_owned(), value.as_ref().to_owned())
+                }
                 _ => None,
             };
         }
