@@ -65,22 +65,22 @@ impl Discovery {
 fn spawn_mdns(registry: Arc<RwLock<HashMap<String, Config>>>) {
     thread::spawn(move || {
         for response in mdns::discover::all(SERVICE_NAME).unwrap() {
-            let response = response.unwrap();
-
-            let mut device_addr = None;
-            let mut txt: HashMap<String, String> = HashMap::new();
-            for record in response.records() {
-                match record.kind {
-                    RecordKind::A(addr) => device_addr = Some(addr.into()),
-                    RecordKind::AAAA(addr) => device_addr = Some(addr.into()),
-                    RecordKind::TXT(ref text) => txt.extend(parser::dns_txt(text)),
-                    _ => (),
+            if let Ok(response) = response {
+                let mut device_addr = None;
+                let mut txt: HashMap<String, String> = HashMap::new();
+                for record in response.records() {
+                    match record.kind {
+                        RecordKind::A(addr) => device_addr = Some(addr.into()),
+                        RecordKind::AAAA(addr) => device_addr = Some(addr.into()),
+                        RecordKind::TXT(ref text) => txt.extend(parser::dns_txt(text)),
+                        _ => (),
+                    }
                 }
-            }
-            let name = txt.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
-            if let (Some(addr), Some(name)) = (device_addr, name) {
-                if let Ok(mut map) = registry.write() {
-                    map.insert(name, Config { addr, txt });
+                let name = txt.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
+                if let (Some(addr), Some(name)) = (device_addr, name) {
+                    if let Ok(mut map) = registry.write() {
+                        map.insert(name, Config { addr, txt });
+                    }
                 }
             }
         }
