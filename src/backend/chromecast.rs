@@ -73,10 +73,7 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, Config>>>) {
                 match record.kind {
                     RecordKind::A(addr) => device_addr = Some(addr.into()),
                     RecordKind::AAAA(addr) => device_addr = Some(addr.into()),
-                    RecordKind::TXT(ref text) => {
-                        let refs: Vec<&str> = text.iter().map(|s| s.deref()).collect();
-                        txt.extend(parser::dns_txt(&refs));
-                    }
+                    RecordKind::TXT(ref text) => txt.extend(parser::dns_txt(text)),
                     _ => (),
                 }
             }
@@ -116,10 +113,10 @@ mod parser {
     );
 
     /// TXT records are given as a Vec of key=value pairs
-    pub fn dns_txt(vec: &[&str]) -> HashMap<String, String> {
+    pub fn dns_txt<T: AsRef<str>>(vec: &[T]) -> HashMap<String, String> {
         let mut collect: HashMap<String, String> = HashMap::new();
         for txt in vec.iter() {
-            match key_value(CompleteByteSlice(txt.as_bytes())) {
+            match key_value(CompleteByteSlice(txt.as_ref().as_bytes())) {
                 Ok((_, (key, value))) => collect.insert(key.to_owned(), value.to_owned()),
                 _ => None,
             };
