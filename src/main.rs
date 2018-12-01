@@ -20,11 +20,10 @@ use std::path::Path;
 use std::time::Duration;
 
 fn main() {
-    let backend = backend::devices()
-        .find(|b| match b {
-            Device::Chromecast(cast) => cast.name() == "Soundbar",
-            _ => false,
-        });
+    let backend = backend::devices().find(|b| match b {
+        Device::Chromecast(cast) => cast.name() == "Soundbar",
+        _ => false,
+    });
     if let Some(mut backend) = backend {
         backend.connect().ok().unwrap();
         let config = playlist::Config::new(Duration::new(5, 0), 10);
@@ -35,7 +34,7 @@ fn main() {
                 track.metadata.artist(),
                 track.metadata.album(),
                 track.metadata.title(),
-                ) {
+            ) {
                 (Some(artist), Some(album), Some(title)) => {
                     println!("{}", title);
                     println!("{} -- {}", artist, album);
