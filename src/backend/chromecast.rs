@@ -1,9 +1,7 @@
-use backend;
-use backend::Error;
+use backend::{Error, Player};
 use mdns::RecordKind;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -16,53 +14,73 @@ lazy_static! {
     static ref DISCOVERY: Discovery = Discovery::new();
 }
 
+/// Configuration for Chromecast endpoints.
+#[derive(Debug)]
 struct Config {
-    pub addr: IpAddr,
-    txt: HashMap<String, String>,
+    /// Name of a Chromecast as given by the `fn` field in its DNS TXT record.
+    name: Option<String>,
+    /// IP Address of a Chromecast as discovered by mdns.
+    addr: IpAddr,
 }
 
 impl Config {
     pub fn name(&self) -> Option<&str> {
-        self.txt.get(CHROMECAST_NAME_KEY).map(|n| n.deref())
+        self.name.deref()
     }
 }
 
-pub struct BackendDevice {
+#[derive(Debug)]
+pub struct Device {
     config: Config,
 }
 
-impl backend::BackendDevice for BackendDevice {
+impl Player for Device {
+    fn name(&self) -> String {
+        self.config.name().unwrap_or_else(|| "Chromecast").to_owned()
+    }
+
     fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
         Ok(())
     }
 }
 
+/// Service discovery for Chromecasts on the network.
+///
+/// Spawn one global instance of `Discovery` to scan multicast DNS broadcasts
+/// and update a global registry of Chromecast config.
 pub struct Discovery {
-    registry: Arc<RwLock<HashMap<String, Config>>>,
+    registry: Arc<RwLock<HashSet<(Option<String>, IpAddr)>>>,
 }
 
 impl Discovery {
+    /// Spawn a thread to run mdns discovery in a loop.
     fn new() -> Self {
-        let registry = Arc::new(RwLock::new(HashMap::new()));
+        let registry = Arc::new(RwLock::new(HashSet::new()));
         spawn_mdns(Arc::clone(&registry));
         Discovery { registry }
     }
 
-    pub fn poll() -> Vec<String> {
+    pub fn poll() -> Vec<Device> {
         DISCOVERY
             .registry
             .read()
-            .map(|map| map.keys().map(|name| name.to_owned()).collect())
+            .map(|registry| {
+                registry
+                    .iter()
+                    .map(|(name, addr)| Device {
+                        config: Config {
+                            name: name.as_ref().map(String::clone),
+                            addr: addr.to_owned()
+                        }
+                    })
+                    .collect()
+            })
             .unwrap_or_else(|_| vec![])
-    }
-
-    pub fn backend(name: &str) -> Option<impl backend::BackendDevice> {
-        let d: Option<BackendDevice> = None;
-        d
     }
 }
 
-fn spawn_mdns(registry: Arc<RwLock<HashMap<String, Config>>>) {
+/// Worker thread that polls mDNS and updates the global Chromecast registry.
+fn spawn_mdns(registry: Arc<RwLock<HashSet<(Option<String>, IpAddr)>>>) {
     thread::spawn(move || {
         for response in mdns::discover::all(SERVICE_NAME).unwrap() {
             if let Ok(response) = response {
@@ -77,9 +95,9 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, Config>>>) {
                     }
                 }
                 let name = txt.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
-                if let (Some(addr), Some(name)) = (device_addr, name) {
-                    if let Ok(mut map) = registry.write() {
-                        map.insert(name, Config { addr, txt });
+                if let Some(addr) = device_addr {
+                    if let Ok(mut set) = registry.write() {
+                        set.insert((name, addr));
                     }
                 }
             }
@@ -87,6 +105,14 @@ fn spawn_mdns(registry: Arc<RwLock<HashMap<String, Config>>>) {
     });
 }
 
+/// Parser for Chromecast TXT records.
+///
+/// Each Chromecast TXT record is a `key=value` pair that specifies some
+/// metadata about the device. There are [several key-value pairs in the record](https://github.com/azasypkin/rust-cast#dns-txt-record-description).
+/// The most relevant ones are:
+///
+/// - `md` - Model Name
+/// - `fn` - Friendly Name
 mod parser {
     extern crate nom;
 
@@ -105,7 +131,8 @@ mod parser {
     )
     );
 
-    /// TXT records are given as a Vec of key=value pairs
+    /// Extract key-value pairs out of a TXT record and collect them into
+    /// a `HashMap`.
     pub fn dns_txt<T: AsRef<str>>(vec: &[T]) -> HashMap<String, String> {
         let mut collect: HashMap<String, String> = HashMap::new();
         for txt in vec.iter() {

@@ -1,5 +1,6 @@
 #![feature(inner_deref)]
 
+extern crate hostname;
 #[macro_use]
 extern crate lazy_static;
 extern crate mdns;
@@ -14,19 +15,21 @@ extern crate walkdir;
 mod backend;
 mod playlist;
 
-use backend::{chromecast, local, BackendDevice};
+use backend::{Device, Player};
 use std::path::Path;
 use std::time::Duration;
 
 fn main() {
-    let backend = local::BackendDevice::new();
-    loop {
-        let chromecasts = chromecast::Discovery::poll();
-        if chromecasts.len() >= 3 {
-            println!("{:?}", chromecasts);
-            break;
-        }
-    }
+    let backend = backend::devices()
+        .map(|b| {
+            println!("{}", b.name());
+            b
+        })
+        .find(|b| match b {
+            Device::Local(_) => true,
+            _ => false,
+        })
+        .unwrap();
 
     let config = playlist::Config::new(Duration::new(5, 0), 10);
     let playlist =
@@ -50,10 +53,11 @@ fn main() {
             }
             _ => (),
         }
-        if let Ok(ref sink) = backend {
-            if sink.play(&track.path, track.duration).is_err() {
-                continue;
-            }
+        if backend.play(&track.path, track.duration).is_err() {
+            continue;
+        }
+        for device in backend::devices() {
+            println!("{}", device.name());
         }
     }
 }
