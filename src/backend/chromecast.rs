@@ -1,4 +1,4 @@
-use backend::{Error, Player};
+use backend::{Error, Player, PlayerKind};
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
 use std::collections::{HashMap, HashSet};
@@ -56,6 +56,10 @@ impl<'p> Player for Device<'p> {
         self.config.name().to_owned()
     }
 
+    fn kind(&self) -> PlayerKind {
+        PlayerKind::Chromecast
+    }
+
     fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
         match CastDevice::connect_without_host_verification(
             format!("{}", self.config.addr),
@@ -96,7 +100,7 @@ impl<'p> Player for Device<'p> {
             })
     }
 
-    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
+    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
         let metadata = MusicTrackMediaMetadata {
             album_name: Some("album".to_owned()), // metadata.album,
             title: Some("title".to_owned()),      //metadata.title,

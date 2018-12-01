@@ -15,16 +15,15 @@ extern crate walkdir;
 mod backend;
 mod playlist;
 
-use backend::{Device, Player};
+use backend::PlayerKind;
 use std::path::Path;
 use std::time::Duration;
 
 fn main() {
-    let backend = backend::devices().find(|b| match b {
-        Device::Chromecast(cast) => cast.name() == "Soundbar",
-        _ => false,
-    });
-    if let Some(mut backend) = backend {
+    let player = backend::players()
+        .filter(|p| p.kind() == PlayerKind::Chromecast)
+        .find(|p| p.name() == "Soundbar");
+    if let Some(mut backend) = player {
         backend.connect().ok().unwrap();
         let config = playlist::Config::new(Duration::new(5, 0), 10);
         let playlist =
@@ -51,8 +50,8 @@ fn main() {
             if backend.play(&track.path, track.duration).is_err() {
                 continue;
             }
-            for device in backend::devices() {
-                println!("{}", device.name());
+            for p in backend::players() {
+                println!("{:?} {}", p.kind(), p.name());
             }
         }
         if let Err(err) = backend.close() {

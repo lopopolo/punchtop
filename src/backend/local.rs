@@ -1,4 +1,4 @@
-use backend::{Error, Player};
+use backend::{Error, Player, PlayerKind};
 use hostname::get_hostname;
 use rodio::{self, Decoder, Sink, Source};
 use std::fs::File;
@@ -25,6 +25,10 @@ impl Player for Device {
         get_hostname().unwrap_or_else(|| "Local".to_owned())
     }
 
+    fn kind(&self) -> PlayerKind {
+        PlayerKind::Local
+    }
+
     fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
         Ok(())
     }
@@ -33,7 +37,7 @@ impl Player for Device {
         Ok(())
     }
 
-    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
+    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
         File::open(path)
             .map_err(|_| Error::CannotLoadMedia(path.as_ref()))
             .and_then(|f| Decoder::new(BufReader::new(f)).map_err(|_| Error::PlaybackFailed))

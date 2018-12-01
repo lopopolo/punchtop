@@ -11,51 +11,22 @@ pub enum Error<'a> {
     BackendNotInitialized,
 }
 
-/// Represents an audio device
-pub enum Device<'a> {
+/// Represents an player backend kind.
+#[derive(Debug, PartialEq)]
+pub enum PlayerKind {
     /// Local playback using a `rodio` backend.
-    Local(local::Device),
+    Local,
     /// Chromecast playback.
-    Chromecast(chromecast::Device<'a>),
+    Chromecast,
 }
 
-impl<'p> Player for Device<'p> {
-    fn name(&self) -> String {
-        match self {
-            Device::Local(device) => device.name(),
-            Device::Chromecast(device) => device.name(),
-        }
-    }
-
-    fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
-        match self {
-            Device::Local(device) => device.connect(),
-            Device::Chromecast(device) => device.connect(),
-        }
-    }
-
-    fn close<'a>(&self) -> Result<(), Error<'a>> {
-        match self {
-            Device::Local(device) => device.close(),
-            Device::Chromecast(device) => device.close(),
-        }
-    }
-
-    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
-        match self {
-            Device::Local(device) => device.play(path, duration),
-            Device::Chromecast(device) => device.play(path, duration),
-        }
-    }
-}
-
-/// An iterator yielding `Device`s available for audio playback.
+/// An iterator yielding `Players`s available for audio playback.
 ///
-/// See [`devices()`](fn.devices.html).
-pub struct Devices<'a>(std::vec::IntoIter<Device<'a>>);
+/// See [`players()`](fn.devices.html).
+pub struct Players(std::vec::IntoIter<Box<Player>>);
 
-impl<'a> Iterator for Devices<'a> {
-    type Item = Device<'a>;
+impl Iterator for Players {
+    type Item = Box<Player>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -63,17 +34,17 @@ impl<'a> Iterator for Devices<'a> {
 }
 
 /// An iterator yielding `Device`s available for audio playback.
-pub fn devices<'a>() -> Devices<'a> {
-    let mut devices = vec![];
+pub fn players() -> Players {
+    let mut devices: Vec<Box<Player>> = vec![];
     if let Ok(local) = local::Device::new() {
-        println!("local");
-        devices.push(Device::Local(local));
+        println!("Found local device: {}", local.name());
+        devices.push(Box::new(local));
     }
     for chromecast in chromecast::devices() {
-        println!("{}", chromecast.name());
-        devices.push(Device::Chromecast(chromecast));
+        println!("Found chromecast device: {}", chromecast.name());
+        devices.push(Box::new(chromecast));
     }
-    Devices(devices.into_iter())
+    Players(devices.into_iter())
 }
 
 /// Represents an audio player that can enqueue tracks for playback.
@@ -84,6 +55,9 @@ pub trait Player {
     /// Display name for the Player.
     fn name(&self) -> String;
 
+    /// The type of player backend.
+    fn kind(&self) -> PlayerKind;
+
     /// Initialize the player to make it active.
     fn connect<'a>(&mut self) -> Result<(), Error<'a>>;
 
@@ -92,5 +66,5 @@ pub trait Player {
 
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and then stop playing the media.
-    fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>>;
+    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>>;
 }
