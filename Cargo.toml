@@ -5,7 +5,6 @@ authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
 [dependencies]
 hostname = "^0.1"
-lazy_static = "*"
 mdns = "*"
 mp3-duration = "*"
 nom = "4"

@@ -1,8 +1,6 @@
 #![feature(inner_deref)]
 
 extern crate hostname;
-#[macro_use]
-extern crate lazy_static;
 extern crate mdns;
 extern crate mp3_duration;
 #[macro_use]
