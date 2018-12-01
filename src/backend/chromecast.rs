@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use rust_cast::channels::heartbeat::HeartbeatResponse;
-use rust_cast::channels::media::{Media, Metadata, MusicTrackMediaMetadata, StreamType};
+use rust_cast::channels::media::{Image, Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::{CastDevice, ChannelMessage};
 
@@ -49,6 +49,13 @@ impl Hash for CastAddr {
 pub struct Device<'a> {
     config: CastAddr,
     connection: Option<(CastDevice<'a>, Application)>,
+}
+
+impl<'a> Drop for Device<'a> {
+    fn drop(&mut self) {
+        let supress: Result<(), ()> = Ok(());
+        self.close().or(supress).expect("Closed Chromecast device");
+    }
 }
 
 impl<'p> Player for Device<'p> {
@@ -109,8 +116,11 @@ impl<'p> Player for Device<'p> {
             composer: None,
             track_number: Some(1 as u32), // use game cursor
             disc_number: None,
-            images: Vec::new(), // TODO
             release_date: None,
+            images: vec![Image {
+                url: "https://upload.wikimedia.org/wikipedia/en/6/63/Radiohead_-_Hail_to_the_Thief_-_album_cover.jpg".to_owned(),
+                dimensions: Some((300, 300)),
+            }],
         };
         let media = Media {
             content_id: "http://192.168.1.64:8000/01%200%20To%20100%20_%20The%20Catch%20Up.mp3"
@@ -196,7 +206,7 @@ impl<'a> Iterator for Devices<'a> {
 pub fn devices<'a>() -> Devices<'a> {
     let mut devices = HashSet::new();
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
-        for response in discovery.timeout(Duration::from_millis(100)) {
+        for response in discovery.timeout(Duration::from_millis(300)) {
             if let Ok(response) = response {
                 let mut addr = None;
                 let mut port = None;

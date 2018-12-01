@@ -29,33 +29,16 @@ fn main() {
         let playlist =
             playlist::Playlist::from_directory(Path::new("/Users/lopopolo/Downloads/test"), config);
         for track in playlist {
-            match (
-                track.metadata.artist(),
-                track.metadata.album(),
-                track.metadata.title(),
-            ) {
-                (Some(artist), Some(album), Some(title)) => {
-                    println!("{}", title);
-                    println!("{} -- {}", artist, album);
-                }
-                (Some(artist), None, Some(title)) => {
-                    println!("{}", title);
-                    println!("{}", artist);
-                }
-                (None, None, Some(title)) => {
-                    println!("{}", title);
-                }
-                _ => (),
-            }
-            if backend.play(&track.path, track.duration).is_err() {
+            let metadata: Vec<&str> = vec![track.metadata.artist(), track.metadata.title(), track.metadata.album()]
+                .iter()
+                .filter(|md| md.is_some())
+                .map(|md| md.unwrap())
+                .collect();
+            println!("{}", metadata.join(" -- "));
+            if let Err(err) = backend.play(&track.path, track.duration) {
+                println!("Error during playback: {:?}", err);
                 continue;
             }
-            for p in backend::players() {
-                println!("{:?} {}", p.kind(), p.name());
-            }
-        }
-        if let Err(err) = backend.close() {
-            println!("Error closing backend: {:?}", err);
         }
     }
 }
