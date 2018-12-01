@@ -1,109 +1,178 @@
 use backend::{Error, Player};
 use mdns::RecordKind;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::net::IpAddr;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
-use std::thread;
 use std::time::Duration;
+
+use rust_cast::channels::media::{Media, Metadata, MusicTrackMediaMetadata, StreamType};
+use rust_cast::channels::receiver::{Application, CastDeviceApp};
+use rust_cast::CastDevice;
 
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
 const CHROMECAST_NAME_KEY: &str = "fn";
 
-lazy_static! {
-    static ref DISCOVERY: Discovery = Discovery::new();
-}
-
 /// Configuration for Chromecast endpoints.
-#[derive(Debug)]
-struct Config {
+struct CastAddr {
     /// Name of a Chromecast as given by the `fn` field in its DNS TXT record.
-    name: Option<String>,
+    name: String,
     /// IP Address of a Chromecast as discovered by mdns.
     addr: IpAddr,
+    /// Port of a Chromecast as discovered by mdns.
+    port: u16,
 }
 
-impl Config {
-    pub fn name(&self) -> Option<&str> {
-        self.name.deref()
+impl CastAddr {
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
-#[derive(Debug)]
-pub struct Device {
-    config: Config,
+impl PartialEq for CastAddr {
+    fn eq(&self, other: &CastAddr) -> bool {
+        self.name == other.name
+    }
 }
 
-impl Player for Device {
+impl Eq for CastAddr {}
+
+impl Hash for CastAddr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+pub struct Device<'a> {
+    config: CastAddr,
+    connection: Option<(CastDevice<'a>, Application)>,
+}
+
+impl<'p> Player for Device<'p> {
     fn name(&self) -> String {
-        self.config.name().unwrap_or_else(|| "Chromecast").to_owned()
+        self.config.name().to_owned()
+    }
+
+    fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
+        match CastDevice::connect_without_host_verification(format!("{}", self.config.addr), self.config.port) {
+            Err(_) => Err(Error::BackendNotInitialized),
+            Ok(device) => {
+                if device.connection.connect("receiver-0").is_err() {
+                    return Err(Error::BackendNotInitialized);
+                }
+                let sink = CastDeviceApp::DefaultMediaReceiver;
+                match device.receiver.launch_app(&sink) {
+                    Err(_) => Err(Error::BackendNotInitialized),
+                    Ok(app) => {
+                        if device.connection.connect(&app.transport_id[..]).is_err() {
+                            return Err(Error::BackendNotInitialized);
+                        }
+                        if let Ok(status) = device.receiver.get_status() {
+                            println!("Status {:?}", status);
+                        }
+                        self.connection = Some((device, app));
+                        Ok(())
+                    },
+                }
+            },
+        }
     }
 
     fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
-        Ok(())
-    }
-}
+        let metadata = MusicTrackMediaMetadata {
+            album_name: Some("album".to_owned()), // metadata.album,
+            title: Some("title".to_owned()), //metadata.title,
+            album_artist: None,
+            artist: Some("artist".to_owned()), // metadata.artist,
+            composer: None,
+            track_number: Some(1 as u32), // use game cursor
+            disc_number: None,
+            images: Vec::new(), // TODO
+            release_date: None,
+        };
+        let media = Media {
+            content_id: "http://0.0.0.0:8000/01 0 To 100 _ The Catch Up.mp3".to_owned(),
+            // Let the device decide whether to buffer or not.
+            stream_type: StreamType::None,
+            content_type: "audio/mp3".to_string(),
+            metadata: Some(Metadata::MusicTrack(metadata)),
+            duration: Some(duration.as_secs() as f32)
+        };
+        let status = self.connection.as_ref().ok_or(Error::BackendNotInitialized)
+            .and_then(|(device, app)| {
+                device.media.load(&app.transport_id[..], &app.session_id[..], &media)
+                    .map_err(|_| Error::CannotLoadMedia(path.as_ref()))
+            });
 
-/// Service discovery for Chromecasts on the network.
-///
-/// Spawn one global instance of `Discovery` to scan multicast DNS broadcasts
-/// and update a global registry of Chromecast config.
-pub struct Discovery {
-    registry: Arc<RwLock<HashSet<(Option<String>, IpAddr)>>>,
-}
+        if let Ok(ref status) = status {
+            for (i, entry) in status.entries.iter().enumerate() {
+                println!("{}{}{}", "Media#", i.to_string(), ": ");
+                println!("{} {}", "Playback rate:", entry.playback_rate.to_string());
+                println!("{} {}", "Player state:", entry.player_state.to_string());
 
-impl Discovery {
-    /// Spawn a thread to run mdns discovery in a loop.
-    fn new() -> Self {
-        let registry = Arc::new(RwLock::new(HashSet::new()));
-        spawn_mdns(Arc::clone(&registry));
-        Discovery { registry }
-    }
-
-    pub fn poll() -> Vec<Device> {
-        DISCOVERY
-            .registry
-            .read()
-            .map(|registry| {
-                registry
-                    .iter()
-                    .map(|(name, addr)| Device {
-                        config: Config {
-                            name: name.as_ref().map(String::clone),
-                            addr: addr.to_owned()
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_else(|_| vec![])
-    }
-}
-
-/// Worker thread that polls mDNS and updates the global Chromecast registry.
-fn spawn_mdns(registry: Arc<RwLock<HashSet<(Option<String>, IpAddr)>>>) {
-    thread::spawn(move || {
-        for response in mdns::discover::all(SERVICE_NAME).unwrap() {
-            if let Ok(response) = response {
-                let mut device_addr = None;
-                let mut txt: HashMap<String, String> = HashMap::new();
-                for record in response.records() {
-                    match record.kind {
-                        RecordKind::A(addr) => device_addr = Some(addr.into()),
-                        RecordKind::AAAA(addr) => device_addr = Some(addr.into()),
-                        RecordKind::TXT(ref text) => txt.extend(parser::dns_txt(text)),
-                        _ => (),
-                    }
+                if let Some(time) = entry.current_time {
+                    println!("{} {}", "Current time:", time.to_string());
                 }
-                let name = txt.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
-                if let Some(addr) = device_addr {
-                    if let Ok(mut set) = registry.write() {
-                        set.insert((name, addr));
+
+                if let Some(ref media) = entry.media {
+                    println!("{} {}", "Content Id:", media.content_id.as_str());
+                    println!("{} {}", "Stream type:", media.stream_type.to_string());
+                    println!("{} {}", "Content type:", media.content_type.as_str());
+
+                    if let Some(duration) = media.duration {
+                        println!("{} {}", "Duration:", duration.to_string());
                     }
                 }
             }
         }
-    });
+        status.map(|_| ())
+    }
 }
+
+/// An iterator yielding Chromecast `Device`s available for audio playback.
+///
+/// See [`devices()`](fn.devices.html).
+pub struct Devices<'a>(std::collections::hash_set::IntoIter<CastAddr>, PhantomData<&'a CastAddr>);
+
+impl<'a> Iterator for Devices<'a> {
+    type Item = Device<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|config| Device { config, connection: None })
+    }
+}
+
+/// An iterator yielding Chromecast `Device`s available for audio playback.
+pub fn devices<'a>() -> Devices<'a> {
+    let mut devices = HashSet::new();
+    if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
+        for response in discovery.timeout(Duration::from_millis(100)) {
+            if let Ok(response) = response {
+                let mut addr = None;
+                let mut port = None;
+                let mut metadata = HashMap::new();
+
+                for record in response.records() {
+                    match record.kind {
+                        RecordKind::A(v4) => addr = Some(v4.into()),
+                        RecordKind::AAAA(v6) => addr = Some(v6.into()),
+                        RecordKind::SRV { port: p, .. } => port = Some(p),
+                        RecordKind::TXT(ref text) => metadata.extend(parser::dns_txt(text)),
+                        _ => (),
+                    }
+                }
+                let name = metadata.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
+                if let (Some(name), Some(addr), Some(port)) = (name, addr, port) {
+                    println!("{:?} {:?} {:?}", name, addr, port);
+                    devices.insert(CastAddr { name, addr, port });
+                }
+            }
+        }
+    }
+    Devices(devices.into_iter(), PhantomData)
+}
+
 
 /// Parser for Chromecast TXT records.
 ///

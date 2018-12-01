@@ -25,6 +25,10 @@ impl Player for Device {
         get_hostname().unwrap_or_else(|| "Local".to_owned())
     }
 
+    fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
+        Ok(())
+    }
+
     fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
         File::open(path)
             .map_err(|_| Error::CannotLoadMedia(path.as_ref()))

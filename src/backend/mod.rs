@@ -11,18 +11,25 @@ pub enum Error<'a> {
 }
 
 /// Represents an audio device
-pub enum Device {
+pub enum Device<'a> {
     /// Local playback using a `rodio` backend.
     Local(local::Device),
     /// Chromecast playback.
-    Chromecast(chromecast::Device),
+    Chromecast(chromecast::Device<'a>),
 }
 
-impl Player for Device {
+impl<'p> Player for Device<'p> {
     fn name(&self) -> String {
         match self {
             Device::Local(device) => device.name(),
             Device::Chromecast(device) => device.name(),
+        }
+    }
+
+    fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
+        match self {
+            Device::Local(device) => device.connect(),
+            Device::Chromecast(device) => device.connect(),
         }
     }
 
@@ -37,10 +44,10 @@ impl Player for Device {
 /// An iterator yielding `Device`s available for audio playback.
 ///
 /// See [`devices()`](fn.devices.html).
-pub struct Devices(std::vec::IntoIter<Device>);
+pub struct Devices<'a>(std::vec::IntoIter<Device<'a>>);
 
-impl Iterator for Devices {
-    type Item = Device;
+impl<'a> Iterator for Devices<'a> {
+    type Item = Device<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -48,12 +55,14 @@ impl Iterator for Devices {
 }
 
 /// An iterator yielding `Device`s available for audio playback.
-pub fn devices() -> Devices {
+pub fn devices<'a>() -> Devices<'a> {
     let mut devices = vec![];
     if let Ok(local) = local::Device::new() {
+        println!("local");
         devices.push(Device::Local(local));
     }
-    for chromecast in chromecast::Discovery::poll() {
+    for chromecast in chromecast::devices() {
+        println!("{}", chromecast.name());
         devices.push(Device::Chromecast(chromecast));
     }
     Devices(devices.into_iter())
@@ -66,6 +75,9 @@ pub fn devices() -> Devices {
 pub trait Player {
     /// Display name for the Player.
     fn name(&self) -> String;
+
+    /// Initialize the player to make it active.
+    fn connect<'a>(&mut self) -> Result<(), Error<'a>>;
 
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and then stop playing the media.

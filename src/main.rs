@@ -9,6 +9,7 @@ extern crate mp3_duration;
 extern crate nom;
 extern crate rand;
 extern crate rodio;
+extern crate rust_cast;
 extern crate taglib;
 extern crate walkdir;
 
@@ -20,7 +21,7 @@ use std::path::Path;
 use std::time::Duration;
 
 fn main() {
-    let backend = backend::devices()
+    let mut backend = backend::devices()
         .map(|b| {
             println!("{}", b.name());
             b
@@ -30,6 +31,7 @@ fn main() {
             _ => false,
         })
         .unwrap();
+    backend.connect();
 
     let config = playlist::Config::new(Duration::new(5, 0), 10);
     let playlist =
