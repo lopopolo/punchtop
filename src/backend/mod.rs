@@ -4,6 +4,7 @@ pub mod local;
 use std::path::Path;
 use std::time::Duration;
 
+#[derive(Debug)]
 pub enum Error<'a> {
     CannotLoadMedia(&'a Path),
     PlaybackFailed,
@@ -30,6 +31,13 @@ impl<'p> Player for Device<'p> {
         match self {
             Device::Local(device) => device.connect(),
             Device::Chromecast(device) => device.connect(),
+        }
+    }
+
+    fn close<'a>(&self) -> Result<(), Error<'a>> {
+        match self {
+            Device::Local(device) => device.close(),
+            Device::Chromecast(device) => device.close(),
         }
     }
 
@@ -78,6 +86,9 @@ pub trait Player {
 
     /// Initialize the player to make it active.
     fn connect<'a>(&mut self) -> Result<(), Error<'a>>;
+
+    /// Close a player to make it inactive.
+    fn close<'a>(&self) -> Result<(), Error<'a>>;
 
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and then stop playing the media.

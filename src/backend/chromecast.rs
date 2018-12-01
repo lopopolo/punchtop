@@ -1,4 +1,5 @@
 use backend::{Error, Player};
+use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -7,9 +8,11 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::time::Duration;
 
+
+use rust_cast::channels::heartbeat::HeartbeatResponse;
 use rust_cast::channels::media::{Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
-use rust_cast::CastDevice;
+use rust_cast::{CastDevice, ChannelMessage};
 
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
 const CHROMECAST_NAME_KEY: &str = "fn";
@@ -79,6 +82,13 @@ impl<'p> Player for Device<'p> {
         }
     }
 
+    fn close<'a>(&self) -> Result<(), Error<'a>> {
+        self.connection.as_ref().ok_or(Error::BackendNotInitialized)
+            .and_then(|(device, app)| {
+                device.receiver.stop_app(&app.session_id[..]).map_err(|_| Error::BackendNotInitialized)
+            })
+    }
+
     fn play<'a, T: AsRef<Path>>(&self, path: &'a T, duration: Duration) -> Result<(), Error<'a>> {
         let metadata = MusicTrackMediaMetadata {
             album_name: Some("album".to_owned()), // metadata.album,
@@ -92,41 +102,51 @@ impl<'p> Player for Device<'p> {
             release_date: None,
         };
         let media = Media {
-            content_id: "http://0.0.0.0:8000/01 0 To 100 _ The Catch Up.mp3".to_owned(),
+            content_id: "http://192.168.1.64:8000/01%200%20To%20100%20_%20The%20Catch%20Up.mp3".to_owned(),
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
             content_type: "audio/mp3".to_string(),
             metadata: Some(Metadata::MusicTrack(metadata)),
-            duration: Some(duration.as_secs() as f32)
+            duration: Some(duration.as_fractional_secs() as f32)
         };
-        let status = self.connection.as_ref().ok_or(Error::BackendNotInitialized)
+        let device = self.connection.as_ref().ok_or(Error::BackendNotInitialized)
             .and_then(|(device, app)| {
                 device.media.load(&app.transport_id[..], &app.session_id[..], &media)
                     .map_err(|_| Error::CannotLoadMedia(path.as_ref()))
+                    .map(|_| (device, app))
             });
 
-        if let Ok(ref status) = status {
-            for (i, entry) in status.entries.iter().enumerate() {
-                println!("{}{}{}", "Media#", i.to_string(), ": ");
-                println!("{} {}", "Playback rate:", entry.playback_rate.to_string());
-                println!("{} {}", "Player state:", entry.player_state.to_string());
-
-                if let Some(time) = entry.current_time {
-                    println!("{} {}", "Current time:", time.to_string());
+        if let Ok((ref device, ref app)) = device {
+            'receive: loop {
+                let recv = match device.receive() {
+                    Ok(ChannelMessage::Heartbeat(HeartbeatResponse::Ping)) => {
+                        device.heartbeat
+                            .pong()
+                            .map_err(|_| Error::PlaybackFailed)
+                            .map(|_| ())
+                    },
+                    Ok(ChannelMessage::Connection(_)) | Ok(ChannelMessage::Media(_)) | Ok(ChannelMessage::Receiver(_)) | Ok(ChannelMessage::Raw(_)) => Ok(()),
+                    _ => Err(Error::PlaybackFailed),
+                };
+                if recv.is_err() {
+                    return recv;
                 }
-
-                if let Some(ref media) = entry.media {
-                    println!("{} {}", "Content Id:", media.content_id.as_str());
-                    println!("{} {}", "Stream type:", media.stream_type.to_string());
-                    println!("{} {}", "Content type:", media.content_type.as_str());
-
-                    if let Some(duration) = media.duration {
-                        println!("{} {}", "Duration:", duration.to_string());
-                    }
+                match device.media.get_status(&app.transport_id[..], None) {
+                    Ok(status) => {
+                        for entry in status.entries {
+                            if let Some(elapsed) = entry.current_time {
+                                if (duration.as_fractional_secs() as f32) < elapsed {
+                                    device.media.stop(&app.transport_id[..], entry.media_session_id).ok().unwrap();
+                                    break 'receive;
+                                }
+                            }
+                        }
+                    },
+                    Err(_) => return Err(Error::PlaybackFailed),
                 }
             }
         }
-        status.map(|_| ())
+        device.map(|_| ())
     }
 }
 
