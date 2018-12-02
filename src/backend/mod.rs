@@ -1,15 +1,21 @@
+use std::path::Path;
+use std::time::Duration;
+
+use rodio;
+use rust_cast;
+
 pub mod chromecast;
 pub mod local;
 pub mod media_server;
 
-use std::path::Path;
-use std::time::Duration;
-
+/// Error wrapper for all player backends.
 #[derive(Debug)]
 pub enum Error<'a> {
-    CannotLoadMedia(&'a Path),
-    PlaybackFailed,
     BackendNotInitialized,
+    CannotLoadMedia(&'a Path),
+    Cast(rust_cast::errors::Error),
+    PlaybackFailed(String),
+    Rodio(rodio::decoder::DecoderError),
 }
 
 /// Represents an player backend kind.

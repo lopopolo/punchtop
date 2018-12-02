@@ -51,14 +51,12 @@ impl Playlist {
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
             .filter(is_music)
-            .filter(|e| {
-                match direntry_to_extension(e) {
-                    Some("mp3") => mp3_duration::from_path(e.path())
-                        .ok()
-                        .and_then(|duration| duration.checked_sub(track_duration))
-                        .is_some(),
-                    _ => true,
-                }
+            .filter(|e| match direntry_to_extension(e) {
+                Some("mp3") => mp3_duration::from_path(e.path())
+                    .ok()
+                    .and_then(|duration| duration.checked_sub(track_duration))
+                    .is_some(),
+                _ => true,
             });
         for entry in walker {
             vec.push(PathBuf::from(entry.path()));

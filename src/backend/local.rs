@@ -20,10 +20,7 @@ fn computer_name() -> Option<String> {
         let host: *mut Object = msg_send![host, currentHost];
         let name: *mut Object = msg_send![host, localizedName];
         let cstr: *const c_char = msg_send![name, UTF8String];
-        CStr::from_ptr(cstr)
-            .to_str()
-            .ok()
-            .map(String::from)
+        CStr::from_ptr(cstr).to_str().ok().map(String::from)
     }
 }
 
@@ -36,10 +33,7 @@ fn computer_name() -> Option<String> {
         let device: *mut Object = msg_send![device, currentDevice];
         let name: *mut Object = msg_send![device, name];
         let cstr: *const c_char = msg_send![name, UTF8String];
-        CStr::from_ptr(cstr)
-            .to_str()
-            .ok()
-            .map(String::from)
+        CStr::from_ptr(cstr).to_str().ok().map(String::from)
     }
 }
 
@@ -65,7 +59,9 @@ impl Device {
 
 impl Player for Device {
     fn name(&self) -> String {
-        computer_name().or_else(get_hostname).unwrap_or_else(|| "Local".to_owned())
+        computer_name()
+            .or_else(get_hostname)
+            .unwrap_or_else(|| "Local".to_owned())
     }
 
     fn kind(&self) -> PlayerKind {
@@ -83,7 +79,7 @@ impl Player for Device {
     fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
         File::open(path)
             .map_err(|_| Error::CannotLoadMedia(path))
-            .and_then(|f| Decoder::new(BufReader::new(f)).map_err(|_| Error::PlaybackFailed))
+            .and_then(|f| Decoder::new(BufReader::new(f)).map_err(Error::Rodio))
             .map(|source| source.buffered())
             .map(|source| source.take_duration(duration))
             .map(|source| {

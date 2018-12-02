@@ -8,9 +8,12 @@ use std::time::Duration;
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
 use neguse_taglib::{get_front_cover, get_tags};
+use rust_cast::channels::connection::ConnectionResponse;
 use rust_cast::channels::heartbeat::HeartbeatResponse;
-use rust_cast::channels::media::{Image, Media, Metadata, MusicTrackMediaMetadata, StreamType};
-use rust_cast::channels::receiver::{Application, CastDeviceApp};
+use rust_cast::channels::media::{
+    Image, Media, MediaResponse, Metadata, MusicTrackMediaMetadata, StreamType,
+};
+use rust_cast::channels::receiver::{Application, CastDeviceApp, ReceiverResponse};
 use rust_cast::{CastDevice, ChannelMessage};
 
 use backend::{media_server, Error, Player, PlayerKind};
@@ -98,7 +101,7 @@ impl<'p> Player for Device<'p> {
                     .map(|app| {
                         self.connection = Some((device, app));
                     })
-                    .map_err(|_| Error::BackendNotInitialized)
+                    .map_err(Error::Cast)
             }
         }
     }
@@ -111,14 +114,14 @@ impl<'p> Player for Device<'p> {
                 device
                     .receiver
                     .stop_app(&app.session_id[..])
-                    .map_err(|_| Error::BackendNotInitialized)
+                    .map_err(Error::Cast)
             })
     }
 
     fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
         let addr = match self.media_server_bind_addr {
             Some(addr) => addr,
-            None => return Err(Error::PlaybackFailed),
+            None => return Err(Error::BackendNotInitialized),
         };
         let pathbuf = PathBuf::from(path);
         let url_path = self
@@ -129,7 +132,7 @@ impl<'p> Player for Device<'p> {
             .map(String::from);
         let url_path = match url_path {
             Some(url_path) => url_path,
-            None => return Err(Error::PlaybackFailed),
+            None => return Err(Error::CannotLoadMedia(path)),
         };
 
         let mut metadata = None;
@@ -169,23 +172,39 @@ impl<'p> Player for Device<'p> {
                 device
                     .media
                     .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(|_| Error::CannotLoadMedia(path))
-                    .map(|_| (device, app))
+                    .map_err(Error::Cast)
+                    .and(Ok((device, app)))
             });
 
         if let Ok((ref device, ref app)) = device {
             'receive: loop {
                 let recv = match device.receive() {
-                    Ok(ChannelMessage::Heartbeat(HeartbeatResponse::Ping)) => device
-                        .heartbeat
-                        .pong()
-                        .map_err(|_| Error::PlaybackFailed)
-                        .map(|_| ()),
-                    Ok(ChannelMessage::Connection(_))
-                    | Ok(ChannelMessage::Media(_))
-                    | Ok(ChannelMessage::Receiver(_))
-                    | Ok(ChannelMessage::Raw(_)) => Ok(()),
-                    _ => Err(Error::PlaybackFailed),
+                    Ok(ChannelMessage::Connection(ConnectionResponse::Close)) => {
+                        Err(Error::PlaybackFailed("cast connection closed".to_owned()))
+                    }
+                    Ok(ChannelMessage::Heartbeat(HeartbeatResponse::Ping)) => {
+                        device.heartbeat.pong().map_err(Error::Cast).and(Ok(()))
+                    }
+                    Ok(ChannelMessage::Media(MediaResponse::LoadFailed(_))) => {
+                        Err(Error::PlaybackFailed("media load failed".to_owned()))
+                    }
+                    Ok(ChannelMessage::Media(MediaResponse::InvalidRequest(err))) => {
+                        Err(Error::PlaybackFailed(
+                            err.reason.unwrap_or("media invalid request".to_owned()),
+                        ))
+                    }
+                    Ok(ChannelMessage::Receiver(ReceiverResponse::LaunchError(err))) => {
+                        Err(Error::PlaybackFailed(
+                            err.reason.unwrap_or("receiver launch error".to_owned()),
+                        ))
+                    }
+                    Ok(ChannelMessage::Receiver(ReceiverResponse::InvalidRequest(err))) => {
+                        Err(Error::PlaybackFailed(
+                            err.reason.unwrap_or("receiver invalid request".to_owned()),
+                        ))
+                    }
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(Error::Cast(err)),
                 };
                 if recv.is_err() {
                     return recv;
@@ -205,11 +224,11 @@ impl<'p> Player for Device<'p> {
                             }
                         }
                     }
-                    Err(_) => return Err(Error::PlaybackFailed),
+                    Err(err) => return Err(Error::Cast(err)),
                 }
             }
         }
-        device.map(|_| ())
+        device.and(Ok(()))
     }
 }
 
