@@ -33,11 +33,15 @@ fn main() {
         backend.connect(root).ok().unwrap();
 
         for track in playlist {
-            let metadata: Vec<&str> = vec![track.metadata.artist(), track.metadata.title(), track.metadata.album()]
-                .iter()
-                .filter(|md| md.is_some())
-                .map(|md| md.unwrap())
-                .collect();
+            let metadata: Vec<&str> = vec![
+                track.metadata.artist(),
+                track.metadata.title(),
+                track.metadata.album(),
+            ]
+            .iter()
+            .filter(|md| md.is_some())
+            .map(|md| md.unwrap())
+            .collect();
             println!("{}", metadata.join(" -- "));
             if let Err(err) = backend.play(&track.path, track.duration) {
                 println!("Error during playback: {:?}", err);

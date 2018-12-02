@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::net::IpAddr;
@@ -10,10 +9,10 @@ use std::time::Duration;
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
 use rouille;
-use rust_cast::{CastDevice, ChannelMessage};
 use rust_cast::channels::heartbeat::HeartbeatResponse;
 use rust_cast::channels::media::{Image, Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
+use rust_cast::{CastDevice, ChannelMessage};
 
 use backend::{Error, Player, PlayerKind};
 
@@ -86,13 +85,20 @@ impl<'p> Player for Device<'p> {
         match CastDevice::connect_without_host_verification(
             format!("{}", self.config.addr),
             self.config.port,
-            ) {
+        ) {
             Err(_) => Err(Error::BackendNotInitialized),
             Ok(device) => {
                 let sink = CastDeviceApp::DefaultMediaReceiver;
-                device.connection.connect("receiver-0")
+                device
+                    .connection
+                    .connect("receiver-0")
                     .and_then(|_| device.receiver.launch_app(&sink))
-                    .and_then(|app| device.connection.connect(&app.transport_id[..]).map(|_| app))
+                    .and_then(|app| {
+                        device
+                            .connection
+                            .connect(&app.transport_id[..])
+                            .map(|_| app)
+                    })
                     .map(|app| {
                         self.connection = Some((device, app));
                         ()
@@ -130,7 +136,8 @@ impl<'p> Player for Device<'p> {
             }],
         };
         let pathbuf = PathBuf::from(path);
-        let url_path = self.root
+        let url_path = self
+            .root
             .as_ref()
             .and_then(|root| pathbuf.strip_prefix(&root).ok())
             .and_then(|suffix| suffix.to_str())
@@ -167,11 +174,11 @@ impl<'p> Player for Device<'p> {
                         .pong()
                         .map_err(|_| Error::PlaybackFailed)
                         .map(|_| ()),
-                        Ok(ChannelMessage::Connection(_))
-                            | Ok(ChannelMessage::Media(_))
-                            | Ok(ChannelMessage::Receiver(_))
-                            | Ok(ChannelMessage::Raw(_)) => Ok(()),
-                        _ => Err(Error::PlaybackFailed),
+                    Ok(ChannelMessage::Connection(_))
+                    | Ok(ChannelMessage::Media(_))
+                    | Ok(ChannelMessage::Receiver(_))
+                    | Ok(ChannelMessage::Raw(_)) => Ok(()),
+                    _ => Err(Error::PlaybackFailed),
                 };
                 if recv.is_err() {
                     return recv;
@@ -205,7 +212,7 @@ impl<'p> Player for Device<'p> {
 pub struct Devices<'a>(
     std::collections::hash_set::IntoIter<CastAddr>,
     PhantomData<&'a CastAddr>,
-    );
+);
 
 impl<'a> Iterator for Devices<'a> {
     type Item = Device<'a>;
