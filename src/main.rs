@@ -8,8 +8,10 @@ extern crate mp3_duration;
 extern crate nom;
 extern crate rand;
 extern crate rodio;
+extern crate rouille;
 extern crate rust_cast;
 extern crate taglib;
+extern crate tree_magic;
 extern crate walkdir;
 
 mod backend;
@@ -24,10 +26,12 @@ fn main() {
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Soundbar");
     if let Some(mut backend) = player {
-        backend.connect().ok().unwrap();
         let config = playlist::Config::new(Duration::new(5, 0), 10);
-        let playlist =
-            playlist::Playlist::from_directory(Path::new("/Users/lopopolo/Downloads/test"), config);
+        let root = Path::new("/Users/lopopolo/Downloads/test");
+        let playlist = playlist::Playlist::from_directory(root, config);
+
+        backend.connect(root).ok().unwrap();
+
         for track in playlist {
             let metadata: Vec<&str> = vec![track.metadata.artist(), track.metadata.title(), track.metadata.album()]
                 .iter()

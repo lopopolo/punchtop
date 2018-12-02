@@ -59,7 +59,7 @@ pub trait Player {
     fn kind(&self) -> PlayerKind;
 
     /// Initialize the player to make it active.
-    fn connect<'a>(&mut self) -> Result<(), Error<'a>>;
+    fn connect<'a>(&mut self, root: &'a Path) -> Result<(), Error<'a>>;
 
     /// Close a player to make it inactive.
     fn close<'a>(&self) -> Result<(), Error<'a>>;

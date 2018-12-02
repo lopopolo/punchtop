@@ -29,7 +29,7 @@ impl Player for Device {
         PlayerKind::Local
     }
 
-    fn connect<'a>(&mut self) -> Result<(), Error<'a>> {
+    fn connect<'a>(&mut self, _root: &'a Path) -> Result<(), Error<'a>> {
         Ok(())
     }
 

@@ -120,15 +120,11 @@ impl Iterator for Playlist {
         if self.cursor >= self.config.count {
             return None;
         }
-        if let Some(p) = self.tracks.pop_front() {
-            println!("{:?}", p);
-            Some(Track {
-                path: p.to_path_buf(),
-                duration: self.config.duration,
-                metadata: Metadata::new(&p),
-            })
-        } else {
-            None
-        }
+        // TODO: reenqueue songs to handle short playlists
+        self.tracks.pop_front().map(|path| Track {
+            path: path.to_path_buf(),
+            duration: self.config.duration,
+            metadata: Metadata::new(&path),
+        })
     }
 }
