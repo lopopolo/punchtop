@@ -11,7 +11,9 @@ use rodio::{self, Decoder, Sink, Source};
 
 use backend::{Error, Player, PlayerKind};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+/// Return a readable computer name using the localized name given
+/// by `NSHost` on macOS.
+#[cfg(target_os = "macos")]
 fn computer_name() -> Option<String> {
     let host = class!(NSHost);
     unsafe {
@@ -25,6 +27,23 @@ fn computer_name() -> Option<String> {
     }
 }
 
+/// Return a readable computer name using the localized name given
+/// by `UIDevice` on iOS.
+#[cfg(target_os = "ios")]
+fn computer_name() -> Option<String> {
+    let device = class!(UIDevice);
+    unsafe {
+        let device: *mut Object = msg_send![device, currentDevice];
+        let name: *mut Object = msg_send![device, name];
+        let cstr: *const c_char = msg_send![name, UTF8String];
+        CStr::from_ptr(cstr)
+            .to_str()
+            .ok()
+            .map(String::from)
+    }
+}
+
+/// Fallback to `get_hostname`.
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn computer_name() -> Option<String> {
     None
