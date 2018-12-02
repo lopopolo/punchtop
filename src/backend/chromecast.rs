@@ -75,7 +75,7 @@ impl<'p> Player for Device<'p> {
         self.root = Some(PathBuf::from(root));
         match media_server::spawn(root) {
             Ok(addr) => self.media_server_bind_addr = Some(addr),
-            err @ Err(_) => return Err(Error::BackendNotInitialized),
+            Err(_) => return Err(Error::BackendNotInitialized),
         };
 
         match CastDevice::connect_without_host_verification(
@@ -169,7 +169,7 @@ impl<'p> Player for Device<'p> {
                 device
                     .media
                     .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(|e| Error::CannotLoadMedia(path))
+                    .map_err(|_| Error::CannotLoadMedia(path))
                     .map(|_| (device, app))
             });
 

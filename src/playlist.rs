@@ -80,10 +80,17 @@ impl Iterator for Playlist {
         if self.cursor >= self.config.count {
             return None;
         }
-        // TODO: reenqueue songs to handle short playlists
-        self.tracks.pop_front().map(|path| Track {
-            path: path.to_path_buf(),
-            duration: self.config.duration,
-        })
+        self.cursor += 1;
+        match self.tracks.pop_front() {
+            Some(path) => {
+                let track = Track {
+                    path: path.to_path_buf(),
+                    duration: self.config.duration,
+                };
+                self.tracks.push_back(path);
+                Some(track)
+            }
+            None => None,
+        }
     }
 }
