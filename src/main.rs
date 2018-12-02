@@ -3,13 +3,15 @@
 extern crate floating_duration;
 extern crate hostname;
 extern crate interfaces;
-#[macro_use]
-extern crate log;
+// #[macro_use]
+// extern crate log;
 extern crate mdns;
 extern crate mp3_duration;
 extern crate neguse_taglib;
 #[macro_use]
 extern crate nom;
+#[macro_use]
+extern crate objc;
 extern crate rand;
 extern crate rodio;
 extern crate rouille;

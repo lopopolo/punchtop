@@ -12,6 +12,7 @@ mdns = "*"
 mp3-duration = "*"
 neguse-taglib = { git = "https://github.com/SilverEzhik/neguse-taglib" }
 nom = "4"
+objc = "*"
 rand = "*"
 rodio = "*"
 rouille = "*"

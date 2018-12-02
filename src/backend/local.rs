@@ -1,10 +1,34 @@
-use backend::{Error, Player, PlayerKind};
-use hostname::get_hostname;
-use rodio::{self, Decoder, Sink, Source};
+use std::ffi::CStr;
 use std::fs::File;
 use std::io::BufReader;
+use std::os::raw::c_char;
 use std::path::Path;
 use std::time::Duration;
+
+use hostname::get_hostname;
+use objc::runtime::Object;
+use rodio::{self, Decoder, Sink, Source};
+
+use backend::{Error, Player, PlayerKind};
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn computer_name() -> Option<String> {
+    let host = class!(NSHost);
+    unsafe {
+        let host: *mut Object = msg_send![host, currentHost];
+        let name: *mut Object = msg_send![host, localizedName];
+        let cstr: *const c_char = msg_send![name, UTF8String];
+        CStr::from_ptr(cstr)
+            .to_str()
+            .ok()
+            .map(String::from)
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+fn computer_name() -> Option<String> {
+    None
+}
 
 pub struct Device {
     sink: Sink,
@@ -22,7 +46,7 @@ impl Device {
 
 impl Player for Device {
     fn name(&self) -> String {
-        get_hostname().unwrap_or_else(|| "Local".to_owned())
+        computer_name().or_else(get_hostname).unwrap_or_else(|| "Local".to_owned())
     }
 
     fn kind(&self) -> PlayerKind {
