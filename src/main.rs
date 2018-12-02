@@ -2,6 +2,9 @@
 
 extern crate floating_duration;
 extern crate hostname;
+extern crate interfaces;
+#[macro_use]
+extern crate log;
 extern crate mdns;
 extern crate mp3_duration;
 #[macro_use]
@@ -19,18 +22,20 @@ mod playlist;
 
 use backend::PlayerKind;
 use std::path::Path;
+use std::thread;
 use std::time::Duration;
 
 fn main() {
     let player = backend::players()
         .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "Soundbar");
+        .find(|p| p.name() == "TV");
     if let Some(mut backend) = player {
         let config = playlist::Config::new(Duration::new(5, 0), 10);
         let root = Path::new("/Users/lopopolo/Downloads/test");
         let playlist = playlist::Playlist::from_directory(root, config);
 
         backend.connect(root).ok().unwrap();
+        //thread::sleep(Duration::new(600, 0));
 
         for track in playlist {
             let metadata: Vec<&str> = vec![
@@ -48,5 +53,6 @@ fn main() {
                 continue;
             }
         }
+        backend.close().ok().unwrap();
     }
 }

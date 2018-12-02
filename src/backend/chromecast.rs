@@ -1,20 +1,18 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::thread;
 use std::time::Duration;
 
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
-use rouille;
 use rust_cast::channels::heartbeat::HeartbeatResponse;
 use rust_cast::channels::media::{Image, Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::{CastDevice, ChannelMessage};
 
-use backend::{Error, Player, PlayerKind};
+use backend::{media_server, Error, Player, PlayerKind};
 
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
 const CHROMECAST_NAME_KEY: &str = "fn";
@@ -53,6 +51,7 @@ pub struct Device<'a> {
     config: CastAddr,
     connection: Option<(CastDevice<'a>, Application)>,
     root: Option<PathBuf>,
+    media_server_bind_addr: Option<SocketAddr>,
 }
 
 impl<'a> Drop for Device<'a> {
@@ -73,15 +72,11 @@ impl<'p> Player for Device<'p> {
 
     fn connect<'a>(&mut self, root: &'a Path) -> Result<(), Error<'a>> {
         self.root = Some(PathBuf::from(root));
-        let document_root = PathBuf::from(root);
-        thread::spawn(move || {
-            println!("Chromecast-Asset-Server: spawn thread");
-            println!("Chromecast-Asset-Server: document_root={:?}", document_root);
-            rouille::start_server("0.0.0.0:8000", move |request| {
-                println!("Chromecast-Asset-Server: request={:?}", request);
-                rouille::match_assets(request, &document_root)
-            });
-        });
+        match media_server::spawn(root) {
+            Ok(addr) => self.media_server_bind_addr = Some(addr),
+            err @ Err(_) => {println!("{:?}", err); return Err(Error::BackendNotInitialized)},
+        };
+
         match CastDevice::connect_without_host_verification(
             format!("{}", self.config.addr),
             self.config.port,
@@ -145,8 +140,12 @@ impl<'p> Player for Device<'p> {
             Some(url_path) => url_path,
             None => return Err(Error::PlaybackFailed),
         };
+        let addr = match self.media_server_bind_addr {
+            Some(addr) => addr,
+            None => return Err(Error::PlaybackFailed),
+        };
         let media = Media {
-            content_id: format!("http://192.168.1.64:8000/{}", url_path),
+            content_id: format!("http://{}/{}", addr, url_path),
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
             content_type: tree_magic::from_filepath(path),
@@ -161,7 +160,7 @@ impl<'p> Player for Device<'p> {
                 device
                     .media
                     .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(|_| Error::CannotLoadMedia(path))
+                    .map_err(|e| {println!("{:?}", e); Error::CannotLoadMedia(path)})
                     .map(|_| (device, app))
             });
 
@@ -221,6 +220,7 @@ impl<'a> Iterator for Devices<'a> {
             config,
             connection: None,
             root: None,
+            media_server_bind_addr: None,
         })
     }
 }
@@ -229,7 +229,7 @@ impl<'a> Iterator for Devices<'a> {
 pub fn devices<'a>() -> Devices<'a> {
     let mut devices = HashSet::new();
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
-        for response in discovery.timeout(Duration::from_millis(300)) {
+        for response in discovery.timeout(Duration::from_millis(1000)) {
             if let Ok(response) = response {
                 let mut addr = None;
                 let mut port = None;

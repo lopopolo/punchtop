@@ -6,6 +6,8 @@ authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 [dependencies]
 floating-duration = "0.1.2"
 hostname = "^0.1"
+interfaces = "*"
+log = "*"
 mdns = "*"
 mp3-duration = "*"
 nom = "4"

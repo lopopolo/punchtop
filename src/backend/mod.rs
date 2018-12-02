@@ -1,5 +1,6 @@
 pub mod chromecast;
 pub mod local;
+pub mod media_server;
 
 use std::path::Path;
 use std::time::Duration;
