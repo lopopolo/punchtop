@@ -188,15 +188,15 @@ impl<'p> Player for Device<'p> {
                 }
                 match device.media.get_status(&app.transport_id[..], None) {
                     Ok(status) => {
+                        println!("{:?}", status);
                         for entry in status.entries {
                             if let Some(elapsed) = entry.current_time {
                                 if (duration.as_fractional_secs() as f32) < elapsed {
-                                    device
+                                    return device
                                         .media
                                         .stop(&app.transport_id[..], entry.media_session_id)
-                                        .ok()
-                                        .unwrap();
-                                    break 'receive;
+                                        .map_err(Error::Cast)
+                                        .and(Ok(()));
                                 }
                             }
                         }
