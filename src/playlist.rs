@@ -16,6 +16,7 @@ fn is_music(entry: &DirEntry) -> bool {
         .and_then(OsStr::to_str);
     match extension {
         Some(ext) if ext == "mp3" => true,
+        Some(ext) if ext == "m4a" => true,
         _ => false,
     }
 }
