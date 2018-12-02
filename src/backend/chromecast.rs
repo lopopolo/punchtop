@@ -101,7 +101,6 @@ impl<'p> Player for Device<'p> {
                     })
                     .map(|app| {
                         self.connection = Some((device, app));
-                        ()
                     })
                     .map_err(|_| Error::BackendNotInitialized)
             }
@@ -162,7 +161,7 @@ impl<'p> Player for Device<'p> {
                 device
                     .media
                     .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(|_| Error::CannotLoadMedia(path.as_ref()))
+                    .map_err(|_| Error::CannotLoadMedia(path))
                     .map(|_| (device, app))
             });
 
