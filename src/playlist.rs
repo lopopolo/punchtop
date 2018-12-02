@@ -8,13 +8,12 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use walkdir::{DirEntry, WalkDir};
 
+fn direntry_to_extension(entry: &DirEntry) -> Option<&str> {
+    Path::new(entry.path()).extension().and_then(OsStr::to_str)
+}
+
 fn is_music(entry: &DirEntry) -> bool {
-    let extension = entry
-        .path()
-        .file_name()
-        .and_then(|p| Path::new(p).extension())
-        .and_then(OsStr::to_str);
-    match extension {
+    match direntry_to_extension(entry) {
         Some(ext) if ext == "mp3" => true,
         Some(ext) if ext == "m4a" => true,
         _ => false,
@@ -51,12 +50,15 @@ impl Playlist {
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
-            .filter(|e| is_music(e))
+            .filter(is_music)
             .filter(|e| {
-                mp3_duration::from_path(e.path())
-                    .ok()
-                    .and_then(|duration| duration.checked_sub(track_duration))
-                    .map_or(false, |_| true)
+                match direntry_to_extension(e) {
+                    Some("mp3") => mp3_duration::from_path(e.path())
+                        .ok()
+                        .and_then(|duration| duration.checked_sub(track_duration))
+                        .is_some(),
+                    _ => true,
+                }
             });
         for entry in walker {
             vec.push(PathBuf::from(entry.path()));
