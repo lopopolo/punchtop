@@ -28,7 +28,7 @@ use std::time::Duration;
 fn main() {
     let player = backend::players()
         .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "TV");
+        .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
         let config = playlist::Config::new(Duration::new(5, 0), 10);
         let root = Path::new("/Users/lopopolo/Downloads/test");

@@ -38,7 +38,7 @@ fn default_interface_addr() -> Result<SocketAddr, Error> {
         .map_err(|_| Error::NoBindInterfaces)
         .map(|interfaces| {
             interfaces.into_iter().filter_map(|i| {
-                if i.is_up() && !i.is_loopback() {
+                if i.is_up() && !i.is_loopback() && i.name == "en0" {
                     i.addresses
                         .iter()
                         .find(|a| a.kind == Kind::Ipv4)
