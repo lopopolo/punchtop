@@ -7,12 +7,9 @@ use std::time::Duration;
 
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
-use neguse_taglib::{get_front_cover, get_tags};
 use rust_cast::channels::connection::ConnectionResponse;
 use rust_cast::channels::heartbeat::HeartbeatResponse;
-use rust_cast::channels::media::{
-    Image, Media, MediaResponse, Metadata, MusicTrackMediaMetadata, StreamType,
-};
+use rust_cast::channels::media::{Media, MediaResponse, Metadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp, ReceiverResponse};
 use rust_cast::{CastDevice, ChannelMessage};
 
@@ -135,33 +132,13 @@ impl<'p> Player for Device<'p> {
             None => return Err(Error::CannotLoadMedia(path)),
         };
 
-        let mut metadata = None;
-        let tags = get_tags(path).ok();
-        let cover = get_front_cover(path);
-        if let Some(tags) = tags {
-            metadata = Some(MusicTrackMediaMetadata {
-                album_name: tags.album.to_option(),
-                title: tags.title.to_option(),
-                album_artist: tags.album_artist.to_option(),
-                artist: tags.artist.to_option(),
-                composer: tags.composer.to_option(),
-                track_number: Some(1 as u32), // use game cursor
-                disc_number: Some(1),
-                release_date: tags.date.to_option().map(|d| d.to_iso_8601()),
-                images: vec![Image {
-                    url: format!("http://{}/image/{}", addr, url_path).to_owned(),
-                    dimensions: cover
-                        .ok()
-                        .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h))),
-                }],
-            });
-        }
         let media = Media {
             content_id: format!("http://{}/media/{}", addr, url_path),
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
             content_type: tree_magic::from_filepath(path),
-            metadata: metadata.map(Metadata::MusicTrack),
+            metadata: cast::metadata(path, format!("http://{}/image/{}", addr, url_path))
+                .map(Metadata::MusicTrack),
             duration: Some(duration.as_fractional_secs() as f32),
         };
         let device = self
@@ -332,5 +309,37 @@ mod parser {
         assert_eq!("Device Name=Bob's", name);
         assert_eq!("Chromecast", model);
         assert_eq!(None, parsed.get("none"));
+    }
+}
+
+mod cast {
+    use std::path::Path;
+
+    use neguse_taglib::{get_front_cover, get_tags};
+    use rust_cast::channels::media::{Image, MusicTrackMediaMetadata};
+
+    pub fn metadata(path: &Path, cover_url: String) -> Option<MusicTrackMediaMetadata> {
+        let mut metadata = None;
+        let tags = get_tags(path).ok();
+        let cover = get_front_cover(path);
+        if let Some(tags) = tags {
+            metadata = Some(MusicTrackMediaMetadata {
+                album_name: tags.album.to_option(),
+                title: tags.title.to_option(),
+                album_artist: tags.album_artist.to_option(),
+                artist: tags.artist.to_option(),
+                composer: tags.composer.to_option(),
+                track_number: Some(1 as u32), // use game cursor
+                disc_number: Some(1),
+                release_date: tags.date.to_option().map(|d| d.to_iso_8601()),
+                images: vec![Image {
+                    url: cover_url,
+                    dimensions: cover
+                        .ok()
+                        .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h))),
+                }],
+            });
+        }
+        metadata
     }
 }
