@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
+use neguse_taglib::{get_front_cover, get_tags};
 use rust_cast::channels::heartbeat::HeartbeatResponse;
 use rust_cast::channels::media::{Image, Media, Metadata, MusicTrackMediaMetadata, StreamType};
 use rust_cast::channels::receiver::{Application, CastDeviceApp};
@@ -74,7 +75,7 @@ impl<'p> Player for Device<'p> {
         self.root = Some(PathBuf::from(root));
         match media_server::spawn(root) {
             Ok(addr) => self.media_server_bind_addr = Some(addr),
-            err @ Err(_) => {println!("{:?}", err); return Err(Error::BackendNotInitialized)},
+            err @ Err(_) => return Err(Error::BackendNotInitialized),
         };
 
         match CastDevice::connect_without_host_verification(
@@ -115,19 +116,9 @@ impl<'p> Player for Device<'p> {
     }
 
     fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
-        let metadata = MusicTrackMediaMetadata {
-            album_name: Some("album".to_owned()), // metadata.album,
-            title: Some("title".to_owned()),      //metadata.title,
-            album_artist: None,
-            artist: Some("artist".to_owned()), // metadata.artist,
-            composer: None,
-            track_number: Some(1 as u32), // use game cursor
-            disc_number: None,
-            release_date: None,
-            images: vec![Image {
-                url: "https://upload.wikimedia.org/wikipedia/en/6/63/Radiohead_-_Hail_to_the_Thief_-_album_cover.jpg".to_owned(),
-                dimensions: Some((300, 300)),
-            }],
+        let addr = match self.media_server_bind_addr {
+            Some(addr) => addr,
+            None => return Err(Error::PlaybackFailed),
         };
         let pathbuf = PathBuf::from(path);
         let url_path = self
@@ -140,16 +131,34 @@ impl<'p> Player for Device<'p> {
             Some(url_path) => url_path,
             None => return Err(Error::PlaybackFailed),
         };
-        let addr = match self.media_server_bind_addr {
-            Some(addr) => addr,
-            None => return Err(Error::PlaybackFailed),
-        };
+
+        let mut metadata = None;
+        let tags = get_tags(path).ok();
+        let cover = get_front_cover(path);
+        if let Some(tags) = tags {
+            metadata = Some(MusicTrackMediaMetadata {
+                album_name: tags.album.to_option(),
+                title: tags.title.to_option(),
+                album_artist: tags.album_artist.to_option(),
+                artist: tags.artist.to_option(),
+                composer: tags.composer.to_option(),
+                track_number: Some(1 as u32), // use game cursor
+                disc_number: Some(1),
+                release_date: tags.date.to_option().map(|d| d.to_iso_8601()),
+                images: vec![Image {
+                    url: format!("http://{}/image/{}", addr, url_path).to_owned(),
+                    dimensions: cover
+                        .ok()
+                        .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h))),
+                }],
+            });
+        }
         let media = Media {
-            content_id: format!("http://{}/{}", addr, url_path),
+            content_id: format!("http://{}/media/{}", addr, url_path),
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
             content_type: tree_magic::from_filepath(path),
-            metadata: Some(Metadata::MusicTrack(metadata)),
+            metadata: metadata.map(Metadata::MusicTrack),
             duration: Some(duration.as_fractional_secs() as f32),
         };
         let device = self
@@ -160,7 +169,7 @@ impl<'p> Player for Device<'p> {
                 device
                     .media
                     .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(|e| {println!("{:?}", e); Error::CannotLoadMedia(path)})
+                    .map_err(|e| Error::CannotLoadMedia(path))
                     .map(|_| (device, app))
             });
 

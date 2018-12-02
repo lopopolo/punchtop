@@ -1,10 +1,11 @@
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use walkdir::{DirEntry, WalkDir};
 
 fn is_music(entry: &DirEntry) -> bool {
@@ -30,51 +31,9 @@ impl Config {
     }
 }
 
-pub struct Metadata {
-    pub artist: Option<String>,
-    pub album: Option<String>,
-    pub title: Option<String>,
-}
-
-impl Metadata {
-    fn new(path: &Path) -> Self {
-        match taglib::File::new(path) {
-            Ok(reader) => {
-                let tag = reader.tag().ok();
-                let artist = tag.as_ref().and_then(|t| t.artist());
-                let album = tag.as_ref().and_then(|t| t.album());
-                let title = tag.as_ref().and_then(|t| t.title());
-                Metadata {
-                    artist,
-                    album,
-                    title,
-                }
-            }
-            Err(_) => Metadata {
-                artist: None,
-                album: None,
-                title: None,
-            },
-        }
-    }
-
-    pub fn artist(&self) -> Option<&str> {
-        self.artist.deref()
-    }
-
-    pub fn album(&self) -> Option<&str> {
-        self.album.deref()
-    }
-
-    pub fn title(&self) -> Option<&str> {
-        self.title.deref()
-    }
-}
-
 pub struct Track {
     pub path: PathBuf,
     pub duration: Duration,
-    pub metadata: Metadata,
 }
 
 pub struct Playlist {
@@ -124,7 +83,6 @@ impl Iterator for Playlist {
         self.tracks.pop_front().map(|path| Track {
             path: path.to_path_buf(),
             duration: self.config.duration,
-            metadata: Metadata::new(&path),
         })
     }
 }
