@@ -1,5 +1,7 @@
 #![feature(inner_deref)]
 
+#[macro_use]
+extern crate crossbeam_channel;
 extern crate floating_duration;
 extern crate hostname;
 extern crate interfaces;
@@ -38,6 +40,7 @@ fn main() {
         backend.connect(root).ok().unwrap();
 
         for track in playlist {
+            println!("{:?}", track);
             if let Err(err) = backend.play(&track.path, track.duration) {
                 println!("Error during playback: {:?}", err);
                 continue;

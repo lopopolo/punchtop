@@ -20,6 +20,7 @@ fn is_music(entry: &DirEntry) -> bool {
     }
 }
 
+#[derive(Debug)]
 pub struct Config {
     duration: Duration,
     count: u64,
@@ -31,11 +32,13 @@ impl Config {
     }
 }
 
+#[derive(Debug)]
 pub struct Track {
     pub path: PathBuf,
     pub duration: Duration,
 }
 
+#[derive(Debug)]
 pub struct Playlist {
     tracks: VecDeque<PathBuf>,
     config: Config,

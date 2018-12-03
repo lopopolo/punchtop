@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use rodio;
@@ -8,13 +8,16 @@ pub mod chromecast;
 pub mod local;
 pub mod media_server;
 
+/// Result type for player operations.
+pub type Result = std::result::Result<(), Error>;
+
 /// Error wrapper for all player backends.
 #[derive(Debug)]
-pub enum Error<'a> {
+pub enum Error {
     BackendNotInitialized,
-    CannotLoadMedia(&'a Path),
+    CannotLoadMedia(PathBuf),
     Cast(rust_cast::errors::Error),
-    PlaybackFailed(String),
+    Internal(String),
     Rodio(rodio::decoder::DecoderError),
 }
 
@@ -66,12 +69,12 @@ pub trait Player {
     fn kind(&self) -> PlayerKind;
 
     /// Initialize the player to make it active.
-    fn connect<'a>(&mut self, root: &'a Path) -> Result<(), Error<'a>>;
+    fn connect(&mut self, root: &Path) -> Result;
 
     /// Close a player to make it inactive.
-    fn close<'a>(&self) -> Result<(), Error<'a>>;
+    fn close(&self) -> Result;
 
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and then stop playing the media.
-    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>>;
+    fn play(&self, path: &Path, duration: Duration) -> Result;
 }

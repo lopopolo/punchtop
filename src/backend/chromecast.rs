@@ -1,31 +1,33 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::Duration;
 
+use crossbeam_channel::{after, unbounded, Receiver, Sender};
 use floating_duration::TimeAsFloat;
 use mdns::RecordKind;
-use rust_cast::channels::connection::ConnectionResponse;
-use rust_cast::channels::heartbeat::HeartbeatResponse;
-use rust_cast::channels::media::{Media, MediaResponse, Metadata, StreamType};
-use rust_cast::channels::receiver::{Application, CastDeviceApp, ReceiverResponse};
-use rust_cast::{CastDevice, ChannelMessage};
+use rust_cast::channels::media::{Media, Metadata, StreamType};
 
-use backend::{media_server, Error, Player, PlayerKind};
+use self::cast::{CastResult, Control};
+use backend::{self, media_server, Error, Player, PlayerKind};
 
+/// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
+/// Key in DNS TXT record for Chromecast "friendly name".
 const CHROMECAST_NAME_KEY: &str = "fn";
+/// Timeout for discovering Chromecast devices with mdns.
+const DISCOVER_TIMEOUT: Duration = Duration::from_millis(1000);
+/// Timeout for communication with Chromecast control thread.
+const RECV_TIMEOUT: Duration = Duration::from_millis(150);
 
 /// Configuration for Chromecast endpoints.
 struct CastAddr {
     /// Name of a Chromecast as given by the `fn` field in its DNS TXT record.
     name: String,
-    /// IP Address of a Chromecast as discovered by mdns.
-    addr: IpAddr,
-    /// Port of a Chromecast as discovered by mdns.
-    port: u16,
+    /// Address of Chromecast as discovered by mdns.
+    addr: SocketAddr,
 }
 
 impl CastAddr {
@@ -48,21 +50,19 @@ impl Hash for CastAddr {
     }
 }
 
-pub struct Device<'a> {
+struct Channel {
+    tx: Sender<Control>,
+    rx: Receiver<CastResult>,
+}
+
+pub struct Device {
     config: CastAddr,
-    connection: Option<(CastDevice<'a>, Application)>,
+    chan: Option<Channel>,
     root: Option<PathBuf>,
     media_server_bind_addr: Option<SocketAddr>,
 }
 
-impl<'a> Drop for Device<'a> {
-    fn drop(&mut self) {
-        let supress: Result<(), ()> = Ok(());
-        self.close().or(supress).expect("Closed Chromecast device");
-    }
-}
-
-impl<'p> Player for Device<'p> {
+impl Player for Device {
     fn name(&self) -> String {
         self.config.name().to_owned()
     }
@@ -71,54 +71,59 @@ impl<'p> Player for Device<'p> {
         PlayerKind::Chromecast
     }
 
-    fn connect<'a>(&mut self, root: &'a Path) -> Result<(), Error<'a>> {
+    fn connect(&mut self, root: &Path) -> backend::Result {
         self.root = Some(PathBuf::from(root));
         match media_server::spawn(root) {
-            Ok(addr) => self.media_server_bind_addr = Some(addr),
-            Err(_) => return Err(Error::BackendNotInitialized),
-        };
+            Ok(addr) => {
+                self.media_server_bind_addr = Some(addr);
 
-        match CastDevice::connect_without_host_verification(
-            format!("{}", self.config.addr),
-            self.config.port,
-        ) {
-            Err(_) => Err(Error::BackendNotInitialized),
-            Ok(device) => {
-                let sink = CastDeviceApp::DefaultMediaReceiver;
-                device
-                    .connection
-                    .connect("receiver-0")
-                    .and_then(|_| device.receiver.launch_app(&sink))
-                    .and_then(|app| {
-                        device
-                            .connection
-                            .connect(&app.transport_id[..])
-                            .map(|_| app)
-                    })
-                    .map(|app| {
-                        self.connection = Some((device, app));
-                    })
-                    .map_err(Error::Cast)
+                let (control_tx, control_rx) = unbounded();
+                let (status_tx, status_rx) = unbounded();
+                let cast_addr = self.config.addr.to_owned();
+                thread::spawn(move || cast::runloop(cast_addr, cast::chan(status_tx, control_rx)));
+
+                let res = select! {
+                    recv(status_rx) -> msg => match msg {
+                        Ok(resp) => resp,
+                        _ => Err(Error::BackendNotInitialized),
+                    },
+                };
+                self.chan = Some(Channel {
+                    tx: control_tx,
+                    rx: status_rx,
+                });
+                res.and(Ok(()))
             }
+            Err(_) => Err(Error::BackendNotInitialized),
         }
     }
 
-    fn close<'a>(&self) -> Result<(), Error<'a>> {
-        self.connection
-            .as_ref()
-            .ok_or(Error::BackendNotInitialized)
-            .and_then(|(device, app)| {
-                device
-                    .receiver
-                    .stop_app(&app.session_id[..])
-                    .map_err(Error::Cast)
-            })
+    fn close(&self) -> backend::Result {
+        if let Some(ref chan) = self.chan {
+            if chan.tx.try_send(Control::Stop).is_err() {
+                return Err(Error::Internal("close failed".to_owned()));
+            }
+            let timeout = after(RECV_TIMEOUT);
+            select! {
+                recv(chan.rx) -> _ => println!("chromecast shutdown: stopped media"),
+                recv(timeout) -> _ => println!("chromecast shutdown: failed to stop media"),
+            }
+            if chan.tx.try_send(Control::Close).is_err() {
+                return Err(Error::Internal("close failed".to_owned()));
+            }
+            let timeout = after(RECV_TIMEOUT);
+            select! {
+                recv(chan.rx) -> _ => println!("chromecast shutdown: closed device"),
+                recv(timeout) -> _ => println!("chromecast shutdown: failed to close device"),
+            }
+        }
+        Ok(())
     }
 
-    fn play<'a>(&self, path: &'a Path, duration: Duration) -> Result<(), Error<'a>> {
-        let addr = match self.media_server_bind_addr {
-            Some(addr) => addr,
-            None => return Err(Error::BackendNotInitialized),
+    fn play(&self, path: &Path, duration: Duration) -> backend::Result {
+        let (ref chan, addr) = match (self.chan.as_ref(), self.media_server_bind_addr) {
+            (Some(chan), Some(addr)) => (chan, addr),
+            _ => return Err(Error::BackendNotInitialized),
         };
         let pathbuf = PathBuf::from(path);
         let url_path = self
@@ -129,7 +134,7 @@ impl<'p> Player for Device<'p> {
             .map(String::from);
         let url_path = match url_path {
             Some(url_path) => url_path,
-            None => return Err(Error::CannotLoadMedia(path)),
+            None => return Err(Error::CannotLoadMedia(PathBuf::from(path))),
         };
 
         let media = Media {
@@ -141,89 +146,39 @@ impl<'p> Player for Device<'p> {
                 .map(Metadata::MusicTrack),
             duration: Some(duration.as_fractional_secs() as f32),
         };
-        let device = self
-            .connection
-            .as_ref()
-            .ok_or(Error::BackendNotInitialized)
-            .and_then(|(device, app)| {
-                device
-                    .media
-                    .load(&app.transport_id[..], &app.session_id[..], &media)
-                    .map_err(Error::Cast)
-                    .and(Ok((device, app)))
-            });
-
-        if let Ok((ref device, ref app)) = device {
-            'receive: loop {
-                let recv = match device.receive() {
-                    Ok(ChannelMessage::Connection(ConnectionResponse::Close)) => {
-                        Err(Error::PlaybackFailed("cast connection closed".to_owned()))
-                    }
-                    Ok(ChannelMessage::Heartbeat(HeartbeatResponse::Ping)) => {
-                        device.heartbeat.pong().map_err(Error::Cast).and(Ok(()))
-                    }
-                    Ok(ChannelMessage::Media(MediaResponse::LoadFailed(_))) => {
-                        Err(Error::PlaybackFailed("media load failed".to_owned()))
-                    }
-                    Ok(ChannelMessage::Media(MediaResponse::InvalidRequest(err))) => {
-                        Err(Error::PlaybackFailed(
-                            err.reason.unwrap_or("media invalid request".to_owned()),
-                        ))
-                    }
-                    Ok(ChannelMessage::Receiver(ReceiverResponse::LaunchError(err))) => {
-                        Err(Error::PlaybackFailed(
-                            err.reason.unwrap_or("receiver launch error".to_owned()),
-                        ))
-                    }
-                    Ok(ChannelMessage::Receiver(ReceiverResponse::InvalidRequest(err))) => {
-                        Err(Error::PlaybackFailed(
-                            err.reason.unwrap_or("receiver invalid request".to_owned()),
-                        ))
-                    }
-                    Ok(_) => Ok(()),
-                    Err(err) => Err(Error::Cast(err)),
-                };
-                if recv.is_err() {
-                    return recv;
-                }
-                match device.media.get_status(&app.transport_id[..], None) {
-                    Ok(status) => {
-                        println!("{:?}", status);
-                        for entry in status.entries {
-                            if let Some(elapsed) = entry.current_time {
-                                if (duration.as_fractional_secs() as f32) < elapsed {
-                                    return device
-                                        .media
-                                        .stop(&app.transport_id[..], entry.media_session_id)
-                                        .map_err(Error::Cast)
-                                        .and(Ok(()));
-                                }
-                            }
-                        }
-                    }
-                    Err(err) => return Err(Error::Cast(err)),
-                }
+        if chan.tx.try_send(Control::Load(Box::new(media))).is_err() {
+            return Err(Error::CannotLoadMedia(PathBuf::from(path)));
+        }
+        let timeout = after(duration);
+        loop {
+            select! {
+                recv(chan.rx) -> msg => match msg {
+                    Ok(Err(err)) => return Err(err),
+                    Err(err) => return Err(
+                        Error::Internal(
+                            format!("cast communication error: {:?}", err).to_owned()
+                        )
+                    ),
+                    _ => {},
+                },
+                recv(timeout) -> _ => return Ok(()),
             }
         }
-        device.and(Ok(()))
     }
 }
 
 /// An iterator yielding Chromecast `Device`s available for audio playback.
 ///
 /// See [`devices()`](fn.devices.html).
-pub struct Devices<'a>(
-    std::collections::hash_set::IntoIter<CastAddr>,
-    PhantomData<&'a CastAddr>,
-);
+pub struct Devices(std::collections::hash_set::IntoIter<CastAddr>);
 
-impl<'a> Iterator for Devices<'a> {
-    type Item = Device<'a>;
+impl Iterator for Devices {
+    type Item = Device;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|config| Device {
             config,
-            connection: None,
+            chan: None,
             root: None,
             media_server_bind_addr: None,
         })
@@ -231,10 +186,10 @@ impl<'a> Iterator for Devices<'a> {
 }
 
 /// An iterator yielding Chromecast `Device`s available for audio playback.
-pub fn devices<'a>() -> Devices<'a> {
+pub fn devices() -> Devices {
     let mut devices = HashSet::new();
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
-        for response in discovery.timeout(Duration::from_millis(1000)) {
+        for response in discovery.timeout(DISCOVER_TIMEOUT) {
             if let Ok(response) = response {
                 let mut addr = None;
                 let mut port = None;
@@ -252,12 +207,15 @@ pub fn devices<'a>() -> Devices<'a> {
                 let name = metadata.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
                 if let (Some(name), Some(addr), Some(port)) = (name, addr, port) {
                     println!("{:?} {:?} {:?}", name, addr, port);
-                    devices.insert(CastAddr { name, addr, port });
+                    devices.insert(CastAddr {
+                        name,
+                        addr: SocketAddr::new(addr, port),
+                    });
                 }
             }
         }
     }
-    Devices(devices.into_iter(), PhantomData)
+    Devices(devices.into_iter())
 }
 
 /// Parser for Chromecast TXT records.
@@ -313,10 +271,40 @@ mod parser {
 }
 
 mod cast {
+    use std::net::SocketAddr;
     use std::path::Path;
 
+    use crossbeam_channel::{Receiver, Sender};
     use neguse_taglib::{get_front_cover, get_tags};
-    use rust_cast::channels::media::{Image, MusicTrackMediaMetadata};
+    use rust_cast::channels::media::{Image, Media, MusicTrackMediaMetadata, StatusEntry};
+    use rust_cast::channels::receiver::{Application, CastDeviceApp};
+    use rust_cast::CastDevice;
+
+    use backend::Error;
+
+    pub type CastResult = Result<Status, Error>;
+
+    pub struct Channel {
+        tx: Sender<CastResult>,
+        rx: Receiver<Control>,
+    }
+
+    pub enum Control {
+        Close,
+        Load(Box<Media>),
+        Stop,
+    }
+
+    pub enum Status {
+        Closed,
+        Connected,
+        Loaded,
+        Stopped,
+    }
+
+    pub fn chan(tx: Sender<CastResult>, rx: Receiver<Control>) -> Channel {
+        Channel { tx, rx }
+    }
 
     pub fn metadata(path: &Path, cover_url: String) -> Option<MusicTrackMediaMetadata> {
         let mut metadata = None;
@@ -341,5 +329,93 @@ mod cast {
             });
         }
         metadata
+    }
+
+    pub fn runloop(addr: SocketAddr, chan: Channel) {
+        let (device, app) = match connect(addr) {
+            Ok(connection) => {
+                let _ = chan.tx.try_send(Ok(Status::Connected));
+                connection
+            }
+            Err(err) => {
+                let _ = chan.tx.send(Err(err));
+                return;
+            }
+        };
+        loop {
+            select! {
+                recv(chan.rx) -> msg => match msg {
+                    Ok(Control::Close) => {
+                        let close = device
+                            .receiver
+                            .stop_app(&app.session_id[..])
+                            .map_err(Error::Cast)
+                            .map(|_| Status::Closed);
+                        let _ = chan.tx.try_send(close);
+                    },
+                    Ok(Control::Load(media)) => {
+                        let load = device
+                            .media
+                            .load(&app.transport_id[..], &app.session_id[..], &media)
+                            .map_err(Error::Cast)
+                            .map(|_| Status::Loaded);
+                        let _ = chan.tx.try_send(load);
+                    },
+                    Ok(Control::Stop) => {
+                        match status(&device, &app) {
+                            Ok(entries) => {
+                                let mut succeed = true;
+                                for entry in entries {
+                                    let stop = device
+                                        .media
+                                        .stop(&app.transport_id[..], entry.media_session_id)
+                                        .map_err(Error::Cast);
+                                    if let Err(stop) = stop {
+                                        let _ = chan.tx.try_send(Err(stop));
+                                        succeed = false;
+                                    }
+                                }
+                                if succeed {
+                                    let _ = chan.tx.try_send(Ok(Status::Stopped));
+                                }
+                            }
+                            Err(err) => {
+                                let _ = chan.tx.try_send(Err(err));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn connect<'a>(addr: SocketAddr) -> Result<(CastDevice<'a>, Application), Error> {
+        let ip = format!("{}", addr.ip());
+        match CastDevice::connect_without_host_verification(ip, addr.port()) {
+            Err(_) => Err(Error::BackendNotInitialized),
+            Ok(device) => {
+                let sink = CastDeviceApp::DefaultMediaReceiver;
+                let app = device
+                    .connection
+                    .connect("receiver-0")
+                    .and_then(|_| device.receiver.launch_app(&sink))
+                    .and_then(|app| {
+                        device
+                            .connection
+                            .connect(&app.transport_id[..])
+                            .map(|_| app)
+                    });
+                app.map_err(Error::Cast).map(|app| (device, app))
+            }
+        }
+    }
+
+    pub fn status(device: &CastDevice, app: &Application) -> Result<Vec<StatusEntry>, Error> {
+        device
+            .media
+            .get_status(&app.transport_id[..], None)
+            .map_err(Error::Cast)
+            .map(|status| status.entries)
     }
 }
