@@ -43,7 +43,7 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Track {
     path: PathBuf,
 }

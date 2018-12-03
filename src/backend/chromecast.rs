@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -54,6 +54,32 @@ impl Hash for CastAddr {
 struct Channel {
     tx: Sender<Control>,
     rx: Receiver<CastResult>,
+}
+
+struct TrackUrl<'a> {
+    root: &'a Path,
+    server: SocketAddr,
+    track: Track,
+}
+
+impl<'a> TrackUrl<'a> {
+    fn url_path(&self) -> Option<String> {
+        PathBuf::from(self.track.path())
+            .strip_prefix(self.root)
+            .ok()
+            .and_then(|suffix| suffix.to_str())
+            .map(String::from)
+    }
+
+    pub fn media(&self) -> Option<String> {
+        self.url_path()
+            .map(|path| format!("http://{}/media/{}", self.server, path))
+    }
+
+    pub fn image(&self) -> Option<String> {
+        self.url_path()
+            .map(|path| format!("http://{}/image/{}", self.server, path))
+    }
 }
 
 pub struct Device {
@@ -125,23 +151,22 @@ impl Player for Device {
             (Some(chan), Some(addr)) => (chan, addr),
             _ => return Err(Error::BackendNotInitialized),
         };
-        let url_path = PathBuf::from(track.path())
-            .strip_prefix(self.game_config.root())
-            .ok()
-            .and_then(|suffix| suffix.to_str())
-            .map(String::from);
-        let url_path = match url_path {
-            Some(url_path) => url_path,
-            None => return Err(Error::CannotLoadMedia(track)),
+        let url = TrackUrl {
+            root: self.game_config.root(),
+            server: addr,
+            track: track.clone(),
+        };
+        let (media, image) = match (url.media(), url.image()) {
+            (Some(media), Some(image)) => (media, image),
+            _ => return Err(Error::CannotLoadMedia(track)),
         };
 
         let media = Media {
-            content_id: format!("http://{}/media/{}", addr, url_path),
+            content_id: media,
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
             content_type: tree_magic::from_filepath(track.path()),
-            metadata: cast::metadata(&track, format!("http://{}/image/{}", addr, url_path))
-                .map(Metadata::MusicTrack),
+            metadata: cast::metadata(&track, image).map(Metadata::MusicTrack),
             duration: Some(self.game_config.duration.as_fractional_secs() as f32),
         };
         if chan.tx.try_send(Control::Load(Box::new(media))).is_err() {
