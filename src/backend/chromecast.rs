@@ -396,6 +396,7 @@ mod cast {
         match CastDevice::connect_without_host_verification(ip, addr.port()) {
             Err(_) => Err(Error::BackendNotInitialized),
             Ok(device) => {
+                // TODO: use a custom styled media receiver - https://developers.google.com/cast/v2/receiver_apps#Styled
                 let sink = CastDeviceApp::DefaultMediaReceiver;
                 let app = device
                     .connection
