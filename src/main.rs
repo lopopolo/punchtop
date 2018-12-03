@@ -37,14 +37,17 @@ fn main() {
     if let Some(mut backend) = player {
         let playlist = playlist::Playlist::from_directory(config);
 
-        if backend.connect().is_ok() {
-            for track in playlist {
-                println!("{:?}", track);
-                if let Err(err) = backend.play(track) {
-                    println!("Error during playback: {:?}", err);
-                    continue;
+        match backend.connect() {
+            Ok(_) => {
+                for track in playlist {
+                    println!("{:?}", track);
+                    if let Err(err) = backend.play(track) {
+                        println!("Error during playback: {:?}", err);
+                        continue;
+                    }
                 }
             }
+            Err(err) => println!("Error when connecting: {:?}", err),
         }
         let _ = backend.close();
     }
