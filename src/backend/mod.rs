@@ -5,7 +5,6 @@ use playlist::{Config, Track};
 
 pub mod chromecast;
 pub mod local;
-pub mod media_server;
 
 /// Result type for player operations.
 pub type Result = std::result::Result<(), Error>;

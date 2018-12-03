@@ -1,3 +1,5 @@
+///! An embedded media server for making tracks and cover art available to a
+///! Chromecast.
 use std::fs;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
