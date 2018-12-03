@@ -1,9 +1,8 @@
 use std::fs;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use interfaces::{Interface, Kind};
 use rouille::{self, Request, Response};
 
 use playlist::Track;
@@ -13,16 +12,33 @@ use playlist::Track;
 pub enum Error {
     /// No interfaces available to bind to.
     NoBindInterfaces,
+    /// No ports available to bind to on selected interface.
+    NoBindPort,
     /// Internal rouille error.
     ServerFailedToStart(Box<std::error::Error + Send + Sync>),
 }
 
+fn port_is_available(addr: SocketAddr) -> bool {
+    TcpListener::bind(addr).is_ok()
+}
+
+fn get_available_port(addr: SocketAddr) -> Result<SocketAddr, Error> {
+    (1025..65535)
+        .map(|port| {
+            let mut candidate = addr;
+            candidate.set_port(port);
+            candidate
+        })
+        .find(|addr| port_is_available(*addr))
+        .ok_or(Error::NoBindPort)
+}
+
 /// Spawn a thread that runs a static asset server rooted at `root`.
-pub fn spawn(root: &Path) -> Result<SocketAddr, Error> {
+pub fn spawn(root: &Path, cast: SocketAddr) -> Result<SocketAddr, Error> {
     let document_root = PathBuf::from(root);
-    default_interface_addr()
-        .and_then(|mut addr| {
-            addr.set_port(3000);
+    default_interface_addr(cast)
+        .and_then(get_available_port)
+        .and_then(|addr| {
             println!("mount media directory root={:?}", document_root);
             rouille::Server::new(addr, move |request| {
                 println!("request={:?}", request);
@@ -75,24 +91,12 @@ fn image_assets(request: &Request, root: &Path) -> Response {
         .unwrap_or_else(Response::empty_404)
 }
 
-/// Find the socket address of the default network interface.
+/// Find the socket address of the default network interface used to
+/// connect to the chromecast at `addr`.
 ///
 /// Used as bind address for `rouille`.
-fn default_interface_addr() -> Result<SocketAddr, Error> {
-    Interface::get_all()
+fn default_interface_addr(addr: SocketAddr) -> Result<SocketAddr, Error> {
+    TcpStream::connect(addr)
+        .and_then(|conn| conn.local_addr())
         .map_err(|_| Error::NoBindInterfaces)
-        .map(|interfaces| {
-            interfaces.into_iter().filter_map(|i| {
-                // TODO: don't hardcode interface.
-                if i.is_up() && !i.is_loopback() && i.name == "en0" {
-                    i.addresses
-                        .iter()
-                        .find(|a| a.kind == Kind::Ipv4)
-                        .and_then(|a| a.addr)
-                } else {
-                    None
-                }
-            })
-        })
-        .and_then(|addrs| addrs.take(1).next().ok_or(Error::NoBindInterfaces))
 }

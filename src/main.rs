@@ -4,7 +4,6 @@
 extern crate crossbeam_channel;
 extern crate floating_duration;
 extern crate hostname;
-extern crate interfaces;
 // #[macro_use]
 // extern crate log;
 extern crate mdns;

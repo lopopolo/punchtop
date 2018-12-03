@@ -73,7 +73,7 @@ impl Player for Device {
     }
 
     fn connect(&mut self) -> backend::Result {
-        match media_server::spawn(self.game_config.root()) {
+        match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
 
