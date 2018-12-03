@@ -310,9 +310,8 @@ mod cast {
     }
 
     pub fn metadata(track: &Track, cover_url: String) -> Option<MusicTrackMediaMetadata> {
-        let mut metadata = None;
-        if let Some(tags) = track.tags() {
-            metadata = Some(MusicTrackMediaMetadata {
+        track.tags().map(|tags| {
+            MusicTrackMediaMetadata {
                 album_name: tags.album.to_option(),
                 title: tags.title.to_option(),
                 album_artist: tags.album_artist.to_option(),
@@ -327,9 +326,8 @@ mod cast {
                         .cover()
                         .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h))),
                 }],
-            });
-        }
-        metadata
+            }
+        })
     }
 
     pub fn runloop(addr: SocketAddr, chan: Channel) {
