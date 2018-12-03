@@ -1,8 +1,7 @@
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-
 use rodio;
 use rust_cast;
+
+use playlist::{Config, Track};
 
 pub mod chromecast;
 pub mod local;
@@ -15,7 +14,7 @@ pub type Result = std::result::Result<(), Error>;
 #[derive(Debug)]
 pub enum Error {
     BackendNotInitialized,
-    CannotLoadMedia(PathBuf),
+    CannotLoadMedia(Track),
     Cast(rust_cast::errors::Error),
     Internal(String),
     Rodio(rodio::decoder::DecoderError),
@@ -44,13 +43,13 @@ impl Iterator for Players {
 }
 
 /// An iterator yielding `Device`s available for audio playback.
-pub fn players() -> Players {
+pub fn players(config: Config) -> Players {
     let mut devices: Vec<Box<Player>> = vec![];
-    if let Ok(local) = local::Device::new() {
+    if let Ok(local) = local::Device::new(config.clone()) {
         println!("Found local device: {}", local.name());
         devices.push(Box::new(local));
     }
-    for chromecast in chromecast::devices() {
+    for chromecast in chromecast::devices(config.clone()) {
         println!("Found chromecast device: {}", chromecast.name());
         devices.push(Box::new(chromecast));
     }
@@ -69,12 +68,12 @@ pub trait Player {
     fn kind(&self) -> PlayerKind;
 
     /// Initialize the player to make it active.
-    fn connect(&mut self, root: &Path) -> Result;
+    fn connect(&mut self) -> Result;
 
     /// Close a player to make it inactive.
     fn close(&self) -> Result;
 
     /// Play the media located at `path` for `duration`. Block until `duration` has
     /// elapsed and then stop playing the media.
-    fn play(&self, path: &Path, duration: Duration) -> Result;
+    fn play(&self, track: Track) -> Result;
 }

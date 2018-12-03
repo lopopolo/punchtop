@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
@@ -12,6 +12,7 @@ use rust_cast::channels::media::{Media, Metadata, StreamType};
 
 use self::cast::{CastResult, Control};
 use backend::{self, media_server, Error, Player, PlayerKind};
+use playlist::{Config, Track};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
@@ -56,30 +57,29 @@ struct Channel {
 }
 
 pub struct Device {
-    config: CastAddr,
+    game_config: Config,
+    connect_config: CastAddr,
     chan: Option<Channel>,
-    root: Option<PathBuf>,
     media_server_bind_addr: Option<SocketAddr>,
 }
 
 impl Player for Device {
     fn name(&self) -> String {
-        self.config.name().to_owned()
+        self.connect_config.name().to_owned()
     }
 
     fn kind(&self) -> PlayerKind {
         PlayerKind::Chromecast
     }
 
-    fn connect(&mut self, root: &Path) -> backend::Result {
-        self.root = Some(PathBuf::from(root));
-        match media_server::spawn(root) {
+    fn connect(&mut self) -> backend::Result {
+        match media_server::spawn(self.game_config.root()) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
 
                 let (control_tx, control_rx) = unbounded();
                 let (status_tx, status_rx) = unbounded();
-                let cast_addr = self.config.addr.to_owned();
+                let cast_addr = self.connect_config.addr.to_owned();
                 thread::spawn(move || cast::runloop(cast_addr, cast::chan(status_tx, control_rx)));
 
                 let res = select! {
@@ -120,36 +120,34 @@ impl Player for Device {
         Ok(())
     }
 
-    fn play(&self, path: &Path, duration: Duration) -> backend::Result {
+    fn play(&self, track: Track) -> backend::Result {
         let (ref chan, addr) = match (self.chan.as_ref(), self.media_server_bind_addr) {
             (Some(chan), Some(addr)) => (chan, addr),
             _ => return Err(Error::BackendNotInitialized),
         };
-        let pathbuf = PathBuf::from(path);
-        let url_path = self
-            .root
-            .as_ref()
-            .and_then(|root| pathbuf.strip_prefix(&root).ok())
+        let url_path = PathBuf::from(track.path())
+            .strip_prefix(self.game_config.root())
+            .ok()
             .and_then(|suffix| suffix.to_str())
             .map(String::from);
         let url_path = match url_path {
             Some(url_path) => url_path,
-            None => return Err(Error::CannotLoadMedia(PathBuf::from(path))),
+            None => return Err(Error::CannotLoadMedia(track)),
         };
 
         let media = Media {
             content_id: format!("http://{}/media/{}", addr, url_path),
             // Let the device decide whether to buffer or not.
             stream_type: StreamType::None,
-            content_type: tree_magic::from_filepath(path),
-            metadata: cast::metadata(path, format!("http://{}/image/{}", addr, url_path))
+            content_type: tree_magic::from_filepath(track.path()),
+            metadata: cast::metadata(&track, format!("http://{}/image/{}", addr, url_path))
                 .map(Metadata::MusicTrack),
-            duration: Some(duration.as_fractional_secs() as f32),
+            duration: Some(self.game_config.duration.as_fractional_secs() as f32),
         };
         if chan.tx.try_send(Control::Load(Box::new(media))).is_err() {
-            return Err(Error::CannotLoadMedia(PathBuf::from(path)));
+            return Err(Error::CannotLoadMedia(track));
         }
-        let timeout = after(duration);
+        let timeout = after(self.game_config.duration);
         loop {
             select! {
                 recv(chan.rx) -> msg => match msg {
@@ -170,23 +168,26 @@ impl Player for Device {
 /// An iterator yielding Chromecast `Device`s available for audio playback.
 ///
 /// See [`devices()`](fn.devices.html).
-pub struct Devices(std::collections::hash_set::IntoIter<CastAddr>);
+pub struct Devices {
+    connect: std::collections::hash_set::IntoIter<CastAddr>,
+    game: Config,
+}
 
 impl Iterator for Devices {
     type Item = Device;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|config| Device {
-            config,
+        self.connect.next().map(|connect_config| Device {
+            connect_config,
+            game_config: self.game.clone(),
             chan: None,
-            root: None,
             media_server_bind_addr: None,
         })
     }
 }
 
 /// An iterator yielding Chromecast `Device`s available for audio playback.
-pub fn devices() -> Devices {
+pub fn devices(game_config: Config) -> Devices {
     let mut devices = HashSet::new();
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
         for response in discovery.timeout(DISCOVER_TIMEOUT) {
@@ -215,7 +216,10 @@ pub fn devices() -> Devices {
             }
         }
     }
-    Devices(devices.into_iter())
+    Devices {
+        connect: devices.into_iter(),
+        game: game_config,
+    }
 }
 
 /// Parser for Chromecast TXT records.
@@ -272,15 +276,14 @@ mod parser {
 
 mod cast {
     use std::net::SocketAddr;
-    use std::path::Path;
 
     use crossbeam_channel::{Receiver, Sender};
-    use neguse_taglib::{get_front_cover, get_tags};
     use rust_cast::channels::media::{Image, Media, MusicTrackMediaMetadata, StatusEntry};
     use rust_cast::channels::receiver::{Application, CastDeviceApp};
     use rust_cast::CastDevice;
 
     use backend::Error;
+    use playlist::Track;
 
     pub type CastResult = Result<Status, Error>;
 
@@ -306,11 +309,9 @@ mod cast {
         Channel { tx, rx }
     }
 
-    pub fn metadata(path: &Path, cover_url: String) -> Option<MusicTrackMediaMetadata> {
+    pub fn metadata(track: &Track, cover_url: String) -> Option<MusicTrackMediaMetadata> {
         let mut metadata = None;
-        let tags = get_tags(path).ok();
-        let cover = get_front_cover(path);
-        if let Some(tags) = tags {
+        if let Some(tags) = track.tags() {
             metadata = Some(MusicTrackMediaMetadata {
                 album_name: tags.album.to_option(),
                 title: tags.title.to_option(),
@@ -322,8 +323,8 @@ mod cast {
                 release_date: tags.date.to_option().map(|d| d.to_iso_8601()),
                 images: vec![Image {
                     url: cover_url,
-                    dimensions: cover
-                        .ok()
+                    dimensions: track
+                        .cover()
                         .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h))),
                 }],
             });

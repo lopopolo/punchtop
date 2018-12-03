@@ -2,14 +2,13 @@ use std::ffi::CStr;
 use std::fs::File;
 use std::io::BufReader;
 use std::os::raw::c_char;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use hostname::get_hostname;
 use objc::runtime::Object;
 use rodio::{self, Decoder, Sink, Source};
 
 use backend::{self, Error, Player, PlayerKind};
+use playlist::{Config, Track};
 
 /// Return a readable computer name using the localized name given
 /// by `NSHost` on macOS.
@@ -45,13 +44,15 @@ fn computer_name() -> Option<String> {
 
 pub struct Device {
     sink: Sink,
+    config: Config,
 }
 
 impl Device {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new(config: Config) -> Result<Self, Error> {
         rodio::default_output_device()
             .map(|device| Device {
                 sink: Sink::new(&device),
+                config,
             })
             .ok_or(Error::BackendNotInitialized)
     }
@@ -68,7 +69,7 @@ impl Player for Device {
         PlayerKind::Local
     }
 
-    fn connect(&mut self, _root: &Path) -> backend::Result {
+    fn connect(&mut self) -> backend::Result {
         Ok(())
     }
 
@@ -76,12 +77,12 @@ impl Player for Device {
         Ok(())
     }
 
-    fn play(&self, path: &Path, duration: Duration) -> backend::Result {
-        File::open(path)
-            .map_err(|_| Error::CannotLoadMedia(PathBuf::from(path)))
+    fn play(&self, track: Track) -> backend::Result {
+        File::open(track.path())
+            .map_err(|_| Error::CannotLoadMedia(track))
             .and_then(|f| Decoder::new(BufReader::new(f)).map_err(Error::Rodio))
             .map(|source| source.buffered())
-            .map(|source| source.take_duration(duration))
+            .map(|source| source.take_duration(self.config.duration))
             .map(|source| {
                 self.sink.append(source);
                 self.sink.sleep_until_end();

@@ -11,6 +11,7 @@ interfaces = "*"
 log = "*"
 mdns = "*"
 mp3-duration = "*"
+neguse-types = { git = "https://github.com/SilverEzhik/neguse-types" }
 neguse-taglib = { git = "https://github.com/SilverEzhik/neguse-taglib" }
 nom = "4"
 objc = "*"

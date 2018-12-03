@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
+use neguse_taglib::{get_front_cover, get_tags};
+use neguse_types::{Image, Tags};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use walkdir::{DirEntry, WalkDir};
@@ -20,22 +22,48 @@ fn is_music(entry: &DirEntry) -> bool {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
-    duration: Duration,
-    count: u64,
+    pub duration: Duration,
+    pub count: u64,
+    root: PathBuf,
 }
 
 impl Config {
-    pub fn new(duration: Duration, count: u64) -> Self {
-        Config { duration, count }
+    pub fn new(duration: Duration, count: u64, root: PathBuf) -> Self {
+        Config {
+            duration,
+            count,
+            root,
+        }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 }
 
 #[derive(Debug)]
 pub struct Track {
-    pub path: PathBuf,
-    pub duration: Duration,
+    path: PathBuf,
+}
+
+impl Track {
+    pub fn new(path: PathBuf) -> Self {
+        Track { path }
+    }
+
+    pub fn tags(&self) -> Option<Tags> {
+        get_tags(&self.path).ok()
+    }
+
+    pub fn cover(&self) -> Option<Image> {
+        get_front_cover(&self.path).ok().filter(|img| img.is_some())
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 #[derive(Debug)]
@@ -46,10 +74,10 @@ pub struct Playlist {
 }
 
 impl Playlist {
-    pub fn from_directory(dir: &Path, config: Config) -> Self {
+    pub fn from_directory(config: Config) -> Self {
         let mut vec = Vec::new();
         let track_duration = config.duration;
-        let walker = WalkDir::new(dir)
+        let walker = WalkDir::new(config.root())
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
@@ -88,7 +116,6 @@ impl Iterator for Playlist {
             Some(path) => {
                 let track = Track {
                     path: path.to_path_buf(),
-                    duration: self.config.duration,
                 };
                 self.tracks.push_back(path);
                 Some(track)

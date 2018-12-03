@@ -10,6 +10,7 @@ extern crate interfaces;
 extern crate mdns;
 extern crate mp3_duration;
 extern crate neguse_taglib;
+extern crate neguse_types;
 #[macro_use]
 extern crate nom;
 #[macro_use]
@@ -22,30 +23,30 @@ extern crate tree_magic;
 extern crate walkdir;
 
 use backend::PlayerKind;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 mod backend;
 mod playlist;
 
 fn main() {
-    let player = backend::players()
+    let root = PathBuf::from("/Users/lopopolo/Downloads/test");
+    let config = playlist::Config::new(Duration::new(5, 0), 10, root);
+    let player = backend::players(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "TV");
     if let Some(mut backend) = player {
-        let config = playlist::Config::new(Duration::new(5, 0), 10);
-        let root = Path::new("/Users/lopopolo/Downloads/test");
-        let playlist = playlist::Playlist::from_directory(root, config);
+        let playlist = playlist::Playlist::from_directory(config);
 
-        backend.connect(root).ok().unwrap();
-
-        for track in playlist {
-            println!("{:?}", track);
-            if let Err(err) = backend.play(&track.path, track.duration) {
-                println!("Error during playback: {:?}", err);
-                continue;
+        if backend.connect().is_ok() {
+            for track in playlist {
+                println!("{:?}", track);
+                if let Err(err) = backend.play(track) {
+                    println!("Error during playback: {:?}", err);
+                    continue;
+                }
             }
         }
-        backend.close().ok().unwrap();
+        let _ = backend.close();
     }
 }

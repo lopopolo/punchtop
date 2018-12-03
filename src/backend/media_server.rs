@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::thread;
 
 use interfaces::{Interface, Kind};
-use neguse_taglib::get_front_cover;
 use rouille::{self, Request, Response};
+
+use playlist::Track;
 
 /// Media server error wrapper.
 #[derive(Debug)]
@@ -68,19 +69,13 @@ fn image_assets(request: &Request, root: &Path) -> Response {
         Ok(_) => (),
         Err(_) => return Response::empty_404(),
     };
-    let img = match get_front_cover(potential_file) {
-        Ok(img) => {
-            if img.is_none() {
-                return Response::empty_404();
-            }
-            img
-        }
-        _ => return Response::empty_404(),
-    };
-    Response::from_data(img.mime(), img.unwrap())
+    Track::new(potential_file)
+        .cover()
+        .map(|img| Response::from_data(img.mime(), img.unwrap()))
+        .unwrap_or_else(Response::empty_404)
 }
 
-/// [WIP] Find the socket address of the default network interface.
+/// Find the socket address of the default network interface.
 ///
 /// Used as bind address for `rouille`.
 fn default_interface_addr() -> Result<SocketAddr, Error> {
@@ -88,6 +83,7 @@ fn default_interface_addr() -> Result<SocketAddr, Error> {
         .map_err(|_| Error::NoBindInterfaces)
         .map(|interfaces| {
             interfaces.into_iter().filter_map(|i| {
+                // TODO: don't hardcode interface.
                 if i.is_up() && !i.is_loopback() && i.name == "en0" {
                     i.addresses
                         .iter()
