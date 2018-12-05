@@ -1050,6 +1050,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "protobuf-codegen-pure"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "protobuf 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "protoc"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1082,6 +1091,7 @@ dependencies = [
  "neguse-types 0.1.0 (git+https://github.com/SilverEzhik/neguse-types)",
  "nom 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "objc 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "protobuf-codegen-pure 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rodio 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rouille 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1852,6 +1862,7 @@ dependencies = [
 "checksum proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)" = "77619697826f31a02ae974457af0b29b723e5619e113e9397b8b82c6bd253f09"
 "checksum protobuf 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cbd08d128db199b1c6bb662e343d7d1a8f6d0060b411675766d88e5146a4bb38"
 "checksum protobuf-codegen 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c5730e51a78ee86d308caaafeb4b01a0bd79fb92b9ab5a8fd4b94c56786e0862"
+"checksum protobuf-codegen-pure 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b0e4940ec64bbd5a7379b315b97452ca9182f3db697ff630f2bb19b3f9fa379"
 "checksum protoc 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5367f59e85854bd8db2b572e72ebaddb31f20ad99bf017f2faa554309c003f5d"
 "checksum protoc-rust 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e137f27c7ed4f039a0197a60441130e102a2931966fb1458b8cf8c21c17104e3"
 "checksum quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9274b940887ce9addde99c4eee6b5c44cc494b182b97e73dc8ffdcb3397fd3f0"

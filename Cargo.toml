@@ -3,6 +3,9 @@ name = "punchtop"
 version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 
+[build-dependencies]
+protobuf-codegen-pure = "2"
+
 [dependencies]
 crossbeam-channel = "0.3"
 floating-duration = "0.1.2"
