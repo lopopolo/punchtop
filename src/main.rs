@@ -1,5 +1,6 @@
 #![feature(inner_deref)]
 
+extern crate byteorder;
 #[macro_use]
 extern crate crossbeam_channel;
 extern crate floating_duration;
@@ -14,11 +15,16 @@ extern crate neguse_types;
 extern crate nom;
 #[macro_use]
 extern crate objc;
+extern crate openssl;
+extern crate protobuf;
 extern crate rand;
 extern crate rodio;
 extern crate rouille;
 extern crate rust_cast;
+#[macro_use]
+extern crate serde_json;
 extern crate tree_magic;
+extern crate url;
 extern crate walkdir;
 
 use backend::PlayerKind;
@@ -26,6 +32,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 mod backend;
+mod cast;
 mod playlist;
 
 fn main() {

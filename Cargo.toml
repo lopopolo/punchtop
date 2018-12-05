@@ -7,6 +7,7 @@ authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 protobuf-codegen-pure = "2"
 
 [dependencies]
+byteorder = "1"
 crossbeam-channel = "0.3"
 floating-duration = "0.1.2"
 hostname = "^0.1"
@@ -17,9 +18,13 @@ neguse-types = { git = "https://github.com/SilverEzhik/neguse-types" }
 neguse-taglib = { git = "https://github.com/SilverEzhik/neguse-taglib" }
 nom = "4"
 objc = "*"
+openssl = "*"
+protobuf = "~2"
 rand = "*"
 rodio = "*"
 rouille = "*"
 rust_cast = "*"
+serde_json = "1.0"
 tree_magic = "*"
+url = "*"
 walkdir = "2"
