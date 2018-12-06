@@ -1,14 +1,17 @@
 #![feature(inner_deref)]
 
+extern crate bytes;
 extern crate byteorder;
 #[macro_use]
 extern crate crossbeam_channel;
 extern crate floating_duration;
+extern crate futures;
 extern crate hostname;
 // #[macro_use]
 // extern crate log;
 extern crate mdns;
 extern crate mp3_duration;
+extern crate native_tls;
 extern crate neguse_taglib;
 extern crate neguse_types;
 #[macro_use]
@@ -23,6 +26,9 @@ extern crate rouille;
 extern crate rust_cast;
 #[macro_use]
 extern crate serde_json;
+extern crate tokio;
+extern crate tokio_io;
+extern crate tokio_tls;
 extern crate tree_magic;
 extern crate url;
 extern crate walkdir;

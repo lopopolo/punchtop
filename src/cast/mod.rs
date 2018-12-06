@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, ReadBytesExt};
+use bytes::{Buf, Bytes, BytesMut, IntoBuf};
 use std::fmt;
 use std::io::{Cursor, Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -7,7 +8,14 @@ use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::thread;
 
 use crossbeam_channel::{self, after, unbounded, Sender, Receiver};
-use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
+use native_tls::TlsConnector;
+use futures::Future;
+use tokio;
+use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
+use tokio_io::AsyncRead;
+use tokio_io::codec::{Decoder, Encoder};
+use tokio_tls::TlsConnector as TokioTlsConnector;
 use serde_json::Value as Json;
 use url::Url;
 
@@ -80,32 +88,32 @@ pub struct Chromecast {
 
 impl Chromecast {
     pub fn connect(addr: SocketAddr) -> Result<Self, Error> {
-        let mut builder = SslConnector::builder(SslMethod::tls()).or(Err(Error::Connect))?;
-        builder.set_verify(SslVerifyMode::NONE);
-
-        let connector = builder.build();
-        let stream = TcpStream::connect(addr).or(Err(Error::Connect))?;
-        // debug!("Chromecast connection with {} successfully established.", addr);
-        let stream = connector.connect(&format!("{}", addr.ip()), stream).or(Err(Error::Connect))?;
-        let mut stream = Arc::new(stream);
-        let mut read_stream = Arc::clone(&stream);
-
         let (command_tx, command_rx) = unbounded();
         let (status_tx, status_rx) = unbounded();
         let chan = Channel { tx: command_tx, rx: status_rx };
         let cast = Chromecast { message_counter: ATOMIC_USIZE_INIT, stream, chan };
 
-        let chan = Channel { tx: status_tx, rx: command_rx };
-        thread::spawn(move || { Chromecast::read(chan, read_stream) });
+        let socket = TcpStream::connect(&addr);
+        let cx = TlsConnector::builder().build().or(Error::Connect)?;
+        let cx = TokioTlsConnector::from(cx);
 
-        let msg = message::connect();
-        let msg = message::encode(msg).or(Err(Error::Connect))?;
-        cast.stream.write(&msg);
-
+        let connect = socket.and_then(move |socket| {
+            cx.connect("www.rust-lang.org", socket).map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, e)
+            })
+        })
+        .and_then(move |socket| {
+            let (read, write) = socket.framed(CastMessageCodec).split();
+            let chan = Channel { tx: status_tx, rx: command_rx };
+            tokio::spawn(move || { Chromecast::read(chan, read) });
+            let msg = message::connect();
+            write.write(msg);
+        });
+        tokio::run(connect);
         Ok(cast)
     }
 
-    fn read(chan: Channel<Status, Command>, mut stream: Arc<SslStream<TcpStream>>) -> () {
+    fn read(chan: Channel<Status, Command>, mut stream: TcpStream) -> () {
         let mut stream = Arc::make_mut(&mut stream);
         loop {
             let mut buffer: [u8; 4] = [0; 4];
@@ -166,6 +174,44 @@ impl Chromecast {
                 }
             }
         }
+    }
+}
+
+struct CastMessageCodec;
+
+impl Encoder for CastMessageCodec {
+    type Item = proto::CastMessage;
+    type Error = protobuf::error::ProtobufError;
+
+    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        match message::encode(item) {
+            Ok(bytes) => {
+                dst.put_slice(&bytes);
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+
+impl Decoder for CastMessageCodec {
+    type Item = proto::CastMessage;
+    type Error = protobuf::error::ProtobufError;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // Protobuf length is the first 4 bytes of the message. decode requires
+        // at least 4 bytes to attempt to process the message.
+        if src.len() < 4 {
+            return Ok(None);
+        }
+        let header = src.split_to(4);
+        let length = BigEndian::read_u32(header.as_ref());
+        if src.len() < length {
+            return Ok(None);
+        }
+        let message = src.truncate(length);
+        protobuf::parse_from_bytes::<proto::CastMessage>(&message)
+            .map(|msg| Some(msg))
     }
 }
 
