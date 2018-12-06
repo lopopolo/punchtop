@@ -27,6 +27,7 @@ extern crate rust_cast;
 #[macro_use]
 extern crate serde_json;
 extern crate tokio;
+extern crate tokio_codec;
 extern crate tokio_io;
 extern crate tokio_tls;
 extern crate tree_magic;

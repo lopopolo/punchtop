@@ -1,18 +1,16 @@
-use byteorder::{BigEndian, ReadBytesExt};
-use bytes::{Buf, Bytes, BytesMut, IntoBuf};
+use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::fmt;
-use std::io::{Cursor, Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
-use std::thread;
+use std::io;
+use std::io::{Read, Write};
+use std::net::SocketAddr;
+use std::sync::atomic::AtomicUsize;
 
-use crossbeam_channel::{self, after, unbounded, Sender, Receiver};
 use native_tls::TlsConnector;
-use futures::Future;
+use futures::{Future, Sink, Stream};
+use futures::sync::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
 use tokio;
 use tokio::net::TcpStream;
-use tokio::runtime::Runtime;
+use tokio_codec::Framed;
 use tokio_io::AsyncRead;
 use tokio_io::codec::{Decoder, Encoder};
 use tokio_tls::TlsConnector as TokioTlsConnector;
@@ -48,8 +46,8 @@ pub struct Image {
 
 #[derive(Debug)]
 pub struct Channel<T, R> {
-    pub tx: Sender<T>,
-    pub rx: Receiver<R>,
+    pub tx: UnboundedSender<T>,
+    pub rx: UnboundedReceiver<R>,
 }
 
 #[derive(Debug)]
@@ -60,6 +58,7 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Command {
     Connect,
+    Heartbeat,
     Load(Media),
 }
 
@@ -82,20 +81,18 @@ pub struct ReceiverVolume {
 #[derive(Debug)]
 pub struct Chromecast {
     message_counter: AtomicUsize,
-    stream: Arc<SslStream<TcpStream>>,
+    write: u8,
     chan: Channel<Command, Status>,
 }
 
 impl Chromecast {
     pub fn connect(addr: SocketAddr) -> Result<Self, Error> {
+        let socket = TcpStream::connect(&addr);
+        let cx = TlsConnector::builder().build().or(Err(Error::Connect))?;
+        let cx = TokioTlsConnector::from(cx);
+
         let (command_tx, command_rx) = unbounded();
         let (status_tx, status_rx) = unbounded();
-        let chan = Channel { tx: command_tx, rx: status_rx };
-        let cast = Chromecast { message_counter: ATOMIC_USIZE_INIT, stream, chan };
-
-        let socket = TcpStream::connect(&addr);
-        let cx = TlsConnector::builder().build().or(Error::Connect)?;
-        let cx = TokioTlsConnector::from(cx);
 
         let connect = socket.and_then(move |socket| {
             cx.connect("www.rust-lang.org", socket).map_err(|e| {
@@ -103,75 +100,55 @@ impl Chromecast {
             })
         })
         .and_then(move |socket| {
-            let (read, write) = socket.framed(CastMessageCodec).split();
+            let (mut write, read) = Framed::new(socket, CastMessageCodec).split();
             let chan = Channel { tx: status_tx, rx: command_rx };
-            tokio::spawn(move || { Chromecast::read(chan, read) });
-            let msg = message::connect();
-            write.write(msg);
+            tokio::spawn(read.then(|message| {
+                message.map(|message| Chromecast::read(message, status_tx, command_tx))
+            }));
+
+            command_tx.unbounded_send(Command::Connect);
+            write.then(|write| write.send(message::connect()))
         });
         tokio::run(connect);
-        Ok(cast)
+        Err(Error::Connect)
     }
 
-    fn read(chan: Channel<Status, Command>, mut stream: TcpStream) -> () {
-        let mut stream = Arc::make_mut(&mut stream);
-        loop {
-            let mut buffer: [u8; 4] = [0; 4];
-            let _ = stream.read_exact(&mut buffer);
-
-            if let Ok(length) = Cursor::new(buffer).read_u32::<BigEndian>() {
-                let mut buffer: Vec<u8> = Vec::with_capacity(length as usize);
-                let mut reader = stream.take(u64::from(length));
-                let _ = reader.read_to_end(&mut buffer);
-                let mut cursor = Cursor::new(buffer);
-
-                let message = match protobuf::parse_from_reader::<proto::CastMessage>(&mut cursor) {
-                    Ok(message) => message,
-                    _ => continue,
-                };
-                let reply = match serde_json::from_str::<Json>(message.get_payload_utf8()) {
-                    Ok(reply) => reply,
-                    _ => continue,
-                };
-                let message_type = message::digs(&reply, &vec!["type"]);
-                let message_type: &str = message_type.deref().unwrap_or("");
-                match message.get_namespace() {
-                    "urn:x-cast:com.google.cast.tp.heartbeat" => {
-                        let msg = message::pong();
-                        if let Ok(bytes) = message::encode(msg) {
-                            stream.write(&bytes);
-                        }
-                    }
-                    "urn:x-cast:com.google.cast.tp.connection" => {
-                        match message_type {
-                            "CLOSE" => {
-                                // debug!("Chromecast connection close");
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                    "urn:x-cast:com.google.cast.media" => {
-                        let _ = match message_type {
-                            "MEDIA_STATUS" => {Ok(())}
-                            "LOAD_CANCELLED" => chan.tx.try_send(Status::LoadCancelled),
-                            "LOAD_FAILED" => chan.tx.try_send(Status::LoadFailed),
-                            "INVALID_PLAYER_STATE" => chan.tx.try_send(Status::InvalidPlayerState),
-                            "INVALID_REQUEST" => chan.tx.try_send(Status::InvalidRequest),
-                            _ => Ok(()),
-                        };
-                    }
-                    "urn:x-cast:com.google.cast.receiver" => {
-                        match message_type {
-                            "RECEIVER_STATUS" => {
-                                let level = message::digf(&reply, &vec!["status", "volume", "level"]);
-                                let muted = message::digb(&reply, &vec!["status", "volume", "muted"]);
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {}
+    fn read(message: proto::CastMessage, tx: UnboundedSender<Status>, heartbeat: UnboundedSender<Command>) -> () {
+        if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
+            let message_type = message::digs(&reply, &vec!["type"]);
+            let message_type: &str = message_type.deref().unwrap_or("");
+            match message.get_namespace() {
+                "urn:x-cast:com.google.cast.tp.heartbeat" => {
+                    heartbeat.unbounded_send(Command::Heartbeat);
                 }
+                "urn:x-cast:com.google.cast.tp.connection" => {
+                    match message_type {
+                        "CLOSE" => {
+                            // debug!("Chromecast connection close");
+                        }
+                        _ => {}
+                    }
+                }
+                "urn:x-cast:com.google.cast.media" => {
+                    let _ = match message_type {
+                        "MEDIA_STATUS" => {Ok(())}
+                        "LOAD_CANCELLED" => tx.unbounded_send(Status::LoadCancelled),
+                        "LOAD_FAILED" => tx.unbounded_send(Status::LoadFailed),
+                        "INVALID_PLAYER_STATE" => tx.unbounded_send(Status::InvalidPlayerState),
+                        "INVALID_REQUEST" => tx.unbounded_send(Status::InvalidRequest),
+                        _ => Ok(()),
+                    };
+                }
+                "urn:x-cast:com.google.cast.receiver" => {
+                    match message_type {
+                        "RECEIVER_STATUS" => {
+                            let level = message::digf(&reply, &vec!["status", "volume", "level"]);
+                            let muted = message::digb(&reply, &vec!["status", "volume", "muted"]);
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -205,12 +182,15 @@ impl Decoder for CastMessageCodec {
             return Ok(None);
         }
         let header = src.split_to(4);
-        let length = BigEndian::read_u32(header.as_ref());
+        let length = {
+            let header = header.into_buf();
+            header.get_u32_be() as usize
+        };
         if src.len() < length {
             return Ok(None);
         }
-        let message = src.truncate(length);
-        protobuf::parse_from_bytes::<proto::CastMessage>(&message)
+        src.truncate(length);
+        protobuf::parse_from_bytes::<proto::CastMessage>(&src)
             .map(|msg| Some(msg))
     }
 }
