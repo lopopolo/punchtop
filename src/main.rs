@@ -1,7 +1,7 @@
 #![feature(inner_deref)]
 
-extern crate bytes;
 extern crate byteorder;
+extern crate bytes;
 extern crate floating_duration;
 extern crate futures;
 extern crate hostname;

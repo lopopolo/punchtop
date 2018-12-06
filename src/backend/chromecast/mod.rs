@@ -76,7 +76,10 @@ impl<'a> CastTrack<'a> {
 
     pub fn metadata(&self) -> Option<Media> {
         let url = self.image().and_then(|url| Url::parse(&url).ok());
-        let dimensions = self.track.cover().and_then(|img| img.dimensions().map(|(w, h, _)| (w, h)));
+        let dimensions = self
+            .track
+            .cover()
+            .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h)));
         let cover = match (url, dimensions) {
             (Some(url), Some(dimensions)) => Some(Image { url, dimensions }),
             _ => None,
@@ -84,14 +87,13 @@ impl<'a> CastTrack<'a> {
         let tags = self.track.tags();
         let url = self.media().and_then(|url| Url::parse(&url).ok());
         match (tags, url) {
-            (Some(tags), Some(url)) =>
-                Some(Media {
-                    title: tags.title.to_option(),
-                    artist: tags.artist.to_option(),
-                    album: tags.album.to_option(),
-                    url,
-                    cover,
-                }),
+            (Some(tags), Some(url)) => Some(Media {
+                title: tags.title.to_option(),
+                artist: tags.artist.to_option(),
+                album: tags.album.to_option(),
+                url,
+                cover,
+            }),
             _ => None,
         }
     }

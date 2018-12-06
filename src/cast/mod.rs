@@ -4,15 +4,15 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 
-use native_tls::TlsConnector;
+use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{Future, Stream};
-use futures::sync::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
+use native_tls::TlsConnector;
+use serde_json::Value as Json;
 use tokio;
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
 use tokio_io::codec::{Decoder, Encoder};
 use tokio_tls::TlsConnector as TokioTlsConnector;
-use serde_json::Value as Json;
 use url::Url;
 
 mod proto;
@@ -101,28 +101,35 @@ impl Chromecast {
         let (status_tx, status_rx) = unbounded();
         let (heartbeat_tx, _heartbeat_rx) = unbounded();
 
-        let connect = socket.and_then(move |socket| {
-            cx.connect("www.rust-lang.org", socket).map_err(|e| {
-                io::Error::new(io::ErrorKind::Other, e)
+        let connect = socket
+            .and_then(move |socket| {
+                cx.connect("www.rust-lang.org", socket)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })
-        })
-        .map(move |socket| {
-            let (_write, read) = Framed::new(socket, CastMessageCodec).split();
-            tokio::prelude::task::spawn(read.then(move |message| {
-                let status = status_tx.clone();
-                let heartbeat = heartbeat_tx.clone();
-                message.map(|msg| Chromecast::read(msg, status, heartbeat))
-            }));
-        })
-        .map(|_| ())
-        .map_err(|_| ());
+            .map(move |socket| {
+                let (_write, read) = Framed::new(socket, CastMessageCodec).split();
+                tokio::prelude::task::spawn(read.then(move |message| {
+                    let status = status_tx.clone();
+                    let heartbeat = heartbeat_tx.clone();
+                    message.map(|msg| Chromecast::read(msg, status, heartbeat))
+                }));
+            })
+            .map(|_| ())
+            .map_err(|_| ());
 
         tokio::run(connect);
         let _ = command_tx.unbounded_send(Command::Connect);
-        Ok(Channel { tx: command_tx, rx: status_rx })
+        Ok(Channel {
+            tx: command_tx,
+            rx: status_rx,
+        })
     }
 
-    fn read(message: proto::CastMessage, tx: UnboundedSender<Status>, heartbeat: UnboundedSender<Command>) -> () {
+    fn read(
+        message: proto::CastMessage,
+        tx: UnboundedSender<Status>,
+        heartbeat: UnboundedSender<Command>,
+    ) -> () {
         if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
             let message_type = message::digs(&reply, &vec!["type"]);
             let message_type: &str = message_type.deref().unwrap_or("");
@@ -140,7 +147,7 @@ impl Chromecast {
                 }
                 "urn:x-cast:com.google.cast.media" => {
                     let _ = match message_type {
-                        "MEDIA_STATUS" => {Ok(())}
+                        "MEDIA_STATUS" => Ok(()),
                         "LOAD_CANCELLED" => tx.unbounded_send(Status::LoadCancelled),
                         "LOAD_FAILED" => tx.unbounded_send(Status::LoadFailed),
                         "INVALID_PLAYER_STATE" => tx.unbounded_send(Status::InvalidPlayerState),
@@ -148,15 +155,13 @@ impl Chromecast {
                         _ => Ok(()),
                     };
                 }
-                "urn:x-cast:com.google.cast.receiver" => {
-                    match message_type {
-                        "RECEIVER_STATUS" => {
-                            let level = message::digf(&reply, &vec!["status", "volume", "level"]);
-                            let muted = message::digb(&reply, &vec!["status", "volume", "muted"]);
-                        }
-                        _ => {}
+                "urn:x-cast:com.google.cast.receiver" => match message_type {
+                    "RECEIVER_STATUS" => {
+                        let level = message::digf(&reply, &vec!["status", "volume", "level"]);
+                        let muted = message::digb(&reply, &vec!["status", "volume", "muted"]);
                     }
-                }
+                    _ => {}
+                },
                 _ => {}
             }
         }
@@ -200,8 +205,7 @@ impl Decoder for CastMessageCodec {
             return Ok(None);
         }
         src.truncate(length);
-        protobuf::parse_from_bytes::<proto::CastMessage>(&src)
-            .map(|msg| Some(msg))
+        protobuf::parse_from_bytes::<proto::CastMessage>(&src).map(|msg| Some(msg))
     }
 }
 
@@ -229,7 +233,10 @@ mod message {
     pub fn dig<'a>(obj: &'a Json, keys: &[&str]) -> Option<Json> {
         let mut curr = obj;
         for key in keys {
-            curr = match curr.as_object().and_then(|object| object.get(key.to_owned())) {
+            let elem = curr
+                .as_object()
+                .and_then(|object| object.get(key.to_owned()));
+            curr = match elem {
                 Some(child) => child,
                 None => return None,
             };
