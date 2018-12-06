@@ -2,8 +2,6 @@
 
 extern crate bytes;
 extern crate byteorder;
-#[macro_use]
-extern crate crossbeam_channel;
 extern crate floating_duration;
 extern crate futures;
 extern crate hostname;

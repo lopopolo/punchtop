@@ -9,7 +9,6 @@ protobuf-codegen-pure = "2"
 [dependencies]
 byteorder = "1"
 bytes = "*"
-crossbeam-channel = "0.3"
 floating-duration = "0.1.2"
 futures = "0.1"
 hostname = "^0.1"

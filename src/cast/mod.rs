@@ -1,17 +1,15 @@
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::fmt;
 use std::io;
-use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 
 use native_tls::TlsConnector;
-use futures::{Future, Sink, Stream};
+use futures::{Future, Stream};
 use futures::sync::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
 use tokio;
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
-use tokio_io::AsyncRead;
 use tokio_io::codec::{Decoder, Encoder};
 use tokio_tls::TlsConnector as TokioTlsConnector;
 use serde_json::Value as Json;
@@ -30,10 +28,16 @@ pub struct Media {
 
 impl fmt::Display for Media {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let parts: Vec<String> = vec![self.artist, self.title, self.album]
-            .into_iter()
-            .filter_map(|part| part)
-            .collect();
+        let mut parts = Vec::new();
+        if let Some(ref artist) = self.artist {
+            parts.push(artist.clone());
+        }
+        if let Some(ref title) = self.title {
+            parts.push(title.clone());
+        }
+        if let Some(ref album) = self.album {
+            parts.push(album.clone());
+        }
         write!(f, "{}", parts.join(" -- "))
     }
 }
@@ -58,8 +62,10 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Command {
     Connect,
+    Close,
     Heartbeat,
     Load(Media),
+    Stop,
 }
 
 #[derive(Debug)]
@@ -86,31 +92,34 @@ pub struct Chromecast {
 }
 
 impl Chromecast {
-    pub fn connect(addr: SocketAddr) -> Result<Self, Error> {
+    pub fn connect(addr: SocketAddr) -> Result<Channel<Command, Status>, Error> {
         let socket = TcpStream::connect(&addr);
         let cx = TlsConnector::builder().build().or(Err(Error::Connect))?;
         let cx = TokioTlsConnector::from(cx);
 
-        let (command_tx, command_rx) = unbounded();
+        let (command_tx, _command_rx) = unbounded();
         let (status_tx, status_rx) = unbounded();
+        let (heartbeat_tx, _heartbeat_rx) = unbounded();
 
         let connect = socket.and_then(move |socket| {
             cx.connect("www.rust-lang.org", socket).map_err(|e| {
                 io::Error::new(io::ErrorKind::Other, e)
             })
         })
-        .and_then(move |socket| {
-            let (mut write, read) = Framed::new(socket, CastMessageCodec).split();
-            let chan = Channel { tx: status_tx, rx: command_rx };
-            tokio::spawn(read.then(|message| {
-                message.map(|message| Chromecast::read(message, status_tx, command_tx))
+        .map(move |socket| {
+            let (_write, read) = Framed::new(socket, CastMessageCodec).split();
+            tokio::prelude::task::spawn(read.then(move |message| {
+                let status = status_tx.clone();
+                let heartbeat = heartbeat_tx.clone();
+                message.map(|msg| Chromecast::read(msg, status, heartbeat))
             }));
+        })
+        .map(|_| ())
+        .map_err(|_| ());
 
-            command_tx.unbounded_send(Command::Connect);
-            write.then(|write| write.send(message::connect()))
-        });
         tokio::run(connect);
-        Err(Error::Connect)
+        let _ = command_tx.unbounded_send(Command::Connect);
+        Ok(Channel { tx: command_tx, rx: status_rx })
     }
 
     fn read(message: proto::CastMessage, tx: UnboundedSender<Status>, heartbeat: UnboundedSender<Command>) -> () {
@@ -119,7 +128,7 @@ impl Chromecast {
             let message_type: &str = message_type.deref().unwrap_or("");
             match message.get_namespace() {
                 "urn:x-cast:com.google.cast.tp.heartbeat" => {
-                    heartbeat.unbounded_send(Command::Heartbeat);
+                    let _ = heartbeat.unbounded_send(Command::Heartbeat);
                 }
                 "urn:x-cast:com.google.cast.tp.connection" => {
                     match message_type {
@@ -161,9 +170,10 @@ impl Encoder for CastMessageCodec {
     type Error = protobuf::error::ProtobufError;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        match message::encode(item) {
-            Ok(bytes) => {
-                dst.put_slice(&bytes);
+        let mut buf = Vec::new();
+        match message::encode(item, &mut buf) {
+            Ok(()) => {
+                dst.put_slice(&buf);
                 Ok(())
             }
             Err(err) => Err(err),
@@ -183,7 +193,7 @@ impl Decoder for CastMessageCodec {
         }
         let header = src.split_to(4);
         let length = {
-            let header = header.into_buf();
+            let mut header = header.into_buf();
             header.get_u32_be() as usize
         };
         if src.len() < length {
@@ -205,7 +215,7 @@ mod message {
     const DEFAULT_DESTINATION_ID: &str = "receiver-0";
 
     pub fn digs<'a>(obj: &'a Json, keys: &[&str]) -> Option<String> {
-        dig(obj, keys).and_then(|obj| obj.as_str()).map(String::from)
+        dig(obj, keys).and_then(|obj| obj.as_str().map(String::from))
     }
 
     pub fn digf<'a>(obj: &'a Json, keys: &[&str]) -> Option<f64> {
@@ -227,12 +237,11 @@ mod message {
         Some(curr.clone())
     }
 
-    pub fn encode(msg: proto::CastMessage) -> ProtobufResult<Vec<u8>> {
-        let mut bytes = Vec::new();
-        let mut output = CodedOutputStream::new(&mut bytes);
+    pub fn encode(msg: proto::CastMessage, buf: &mut Vec<u8>) -> ProtobufResult<()> {
+        let mut output = CodedOutputStream::new(buf);
         msg.write_to(&mut output)?;
         output.flush();
-        Ok(bytes)
+        Ok(())
     }
 
     pub fn connect() -> proto::CastMessage {
