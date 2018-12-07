@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::error;
 use std::fmt;
@@ -229,28 +229,28 @@ impl Encoder for CastMessageCodec {
         let mut buf = Vec::new();
         match message::encode(message, &mut buf) {
             Ok(()) => {
-                let header = {
-                    let mut len = vec![];
-                    len.write_u32::<BigEndian>(buf.len() as u32).unwrap();
-                    len
-                };
+                // Cast wire protocol is a 4-byte big endian length-prefixed
+                // protobuf.
+                let mut header = &mut [0u8; 4];
+                BigEndian::write_u32(header, buf.len() as u32);
 
-                dst.put_slice(&header);
+                dst.put_slice(header);
                 dst.put_slice(&buf);
                 Ok(())
             }
-            Err(err) => {println!("encoder error: {:?}", err); Err(err)}
+            Err(err) => Err(err),
         }
     }
 }
 
 impl Decoder for CastMessageCodec {
+    // TODO: this should be a higher level type that includes the decoded JSON payload
     type Item = proto::CastMessage;
     type Error = protobuf::error::ProtobufError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        // Protobuf length is the first 4 bytes of the message. decode requires
-        // at least 4 bytes to attempt to process the message.
+        // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
+        // At least 4 bytes are required to decode the next frame.
         if src.len() < 4 {
             return Ok(None);
         }
