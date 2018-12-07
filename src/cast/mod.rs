@@ -72,8 +72,8 @@ impl fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum Command {
-    Connect,
     Close,
+    Connect,
     Heartbeat,
     Load(Media),
     Stop,
@@ -105,66 +105,32 @@ pub struct Chromecast {
 impl Chromecast {
     pub fn connect(addr: SocketAddr) -> Result<Channel<Command, Status>, Error> {
         let socket = TcpStream::connect(&addr);
+        let cx = TlsConnector::builder()
+            .danger_accept_invalid_hostnames(true)
+            .danger_accept_invalid_certs(true)
+            .build()
+            .map(tokio_tls::TlsConnector::from)
+            .map_err(|_| Error::Connect)?;
 
-        let (command_tx, _command_rx) = unbounded();
+        let (command_tx, command_rx) = unbounded();
         let (status_tx, status_rx) = unbounded();
-        let (heartbeat_tx, _heartbeat_rx) = unbounded();
+        let heartbeat = command_tx.clone();
 
         let connect = socket
-            .and_then(|socket| {
-                let socket = Framed::new(socket, DeviceAuthCodec);
-                println!("Issuing deviceauth challenge");
-                socket
-                    .send(())
-                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-            })
-            .and_then(|socket| {
-                socket
-                    .take(1)
-                    .into_future()
-                    .map_err(|(err, _)| io::Error::new(io::ErrorKind::Other, err))
-                    .map(|next| {
-                        let (auth, stream) = next;
-                        auth.ok_or(io::Error::new(io::ErrorKind::Other, Error::Connect))
-                            .and_then(|auth| {
-                                println!("Received chromecast certificate");
-                                Certificate::from_der(auth.get_client_auth_certificate())
-                                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                                    .and_then(|cert| {
-                                        TlsConnector::builder()
-                                            .add_root_certificate(cert)
-                                            .build()
-                                            .map(tokio_tls::TlsConnector::from)
-                                            .map(|cx| (stream.into_inner().into_inner(), cx))
-                                            .map_err(|err| {
-                                                io::Error::new(io::ErrorKind::Other, err)
-                                            })
-                                    })
-                            })
-                    })
-            })
-            .and_then(move |socket| match socket {
-                Ok((socket, cx)) => {
-                    println!("Establishing TLS connection with Chromecast");
-                    let connect = cx
-                        .connect(&format!("{}", addr.ip()), socket)
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
-                    future::Either::A(connect)
-                }
-                Err(err) => {
-                    println!("err: {:?}", err);
-                    let err = io::Error::new(io::ErrorKind::Other, err);
-                    future::Either::B(future::err(err))
-                }
+            .and_then(move |socket| {
+                println!("Establishing TLS connection with Chromecast");
+                cx.connect(&format!("{}", addr.ip()), socket)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })
             .map(move |socket| {
                 println!("Chomecast connect successful");
-                let (_write, read) = Framed::new(socket, CastMessageCodec).split();
+                let (write, read) = Framed::new(socket, CastMessageCodec).split();
                 tokio::prelude::task::spawn(read.then(move |message| {
                     let status = status_tx.clone();
-                    let heartbeat = heartbeat_tx.clone();
+                    let heartbeat = heartbeat.clone();
                     message.map(|msg| Chromecast::read(msg, status, heartbeat))
                 }));
+                tokio::prelude::task::spawn(command_rx.forward(write.sink_map_err(|_| ())));
             })
             .map(|_| ())
             .map_err(|err| println!("Chromecast connect err: {:?}", err));
@@ -180,14 +146,15 @@ impl Chromecast {
     fn read(
         message: proto::CastMessage,
         tx: UnboundedSender<Status>,
-        heartbeat: UnboundedSender<Command>,
+        command: UnboundedSender<Command>,
     ) {
         if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
             let message_type = message::digs(&reply, &vec!["type"]);
             let message_type: &str = message_type.deref().unwrap_or("");
             match message.get_namespace() {
                 "urn:x-cast:com.google.cast.tp.heartbeat" => {
-                    let _ = heartbeat.unbounded_send(Command::Heartbeat);
+                    println!("Got heartbeat");
+                    let _ = command.unbounded_send(Command::Heartbeat);
                 }
                 "urn:x-cast:com.google.cast.tp.connection" => {
                     match message_type {
@@ -220,59 +187,22 @@ impl Chromecast {
     }
 }
 
-struct DeviceAuthCodec;
-
-impl Encoder for DeviceAuthCodec {
-    type Item = ();
-    type Error = protobuf::error::ProtobufError;
-
-    fn encode(&mut self, _item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let mut buf = Vec::new();
-        let mut msg = proto::DeviceAuthMessage::new();
-        msg.set_challenge(proto::AuthChallenge::new());
-
-        match message::encode(msg, &mut buf) {
-            Ok(()) => {
-                dst.put_slice(&buf);
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
-    }
-}
-
-impl Decoder for DeviceAuthCodec {
-    type Item = proto::AuthResponse;
-    type Error = protobuf::error::ProtobufError;
-
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        // Protobuf length is the first 4 bytes of the message. decode requires
-        // at least 4 bytes to attempt to process the message.
-        if src.len() < 4 {
-            return Ok(None);
-        }
-        let header = src.split_to(4);
-        let length = {
-            let mut header = header.into_buf();
-            header.get_u32_be() as usize
-        };
-        if src.len() < length {
-            return Ok(None);
-        }
-        src.truncate(length);
-        protobuf::parse_from_bytes::<proto::AuthResponse>(&src).map(|msg| Some(msg))
-    }
-}
-
 struct CastMessageCodec;
 
 impl Encoder for CastMessageCodec {
-    type Item = proto::CastMessage;
+    type Item = Command;
     type Error = protobuf::error::ProtobufError;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let message = match item {
+            Command::Connect => message::connect(),
+            Command::Close => message::connect(),
+            Command::Heartbeat => message::pong(),
+            Command::Load(_) => message::connect(),
+            Command::Stop => message::connect(),
+        };
         let mut buf = Vec::new();
-        match message::encode(item, &mut buf) {
+        match message::encode(message, &mut buf) {
             Ok(()) => {
                 dst.put_slice(&buf);
                 Ok(())
