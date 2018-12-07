@@ -16,7 +16,7 @@ use tokio;
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
 use tokio_io::codec::{Decoder, Encoder};
-use tokio_timer::Interval;
+use tokio::timer::Interval;
 use url::Url;
 
 mod proto;
