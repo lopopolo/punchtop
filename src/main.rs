@@ -34,6 +34,7 @@ extern crate walkdir;
 
 use backend::PlayerKind;
 use std::path::PathBuf;
+use std::thread;
 use std::time::Duration;
 
 mod backend;
@@ -45,12 +46,13 @@ fn main() {
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
     let player = backend::players(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "TV");
+        .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
         let playlist = playlist::Playlist::from_directory(config);
 
         match backend.connect() {
             Ok(_) => {
+                thread::sleep(Duration::new(60, 0));
                 for track in playlist {
                     println!("{:?}", track);
                     if let Err(err) = backend.play(track) {
