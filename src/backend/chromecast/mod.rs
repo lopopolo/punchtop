@@ -133,7 +133,7 @@ impl Player for Device {
 
     fn close(&self) -> backend::Result {
         if let Some(ref chan) = self.chan {
-            let _ = chan.tx.unbounded_send(Command::Stop);
+            let _ = chan.tx.unbounded_send(Command::Stop("".to_owned()));
             let _ = chan.tx.unbounded_send(Command::Close);
         }
         Ok(())

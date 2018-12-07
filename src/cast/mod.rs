@@ -4,16 +4,18 @@ use std::fmt;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
+use std::time::Duration;
 
 use futures::sink::Sink;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{Future, Stream};
+use futures::{future, Future, Stream};
 use native_tls::TlsConnector;
 use serde_json::Value as Json;
 use tokio;
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
 use tokio_io::codec::{Decoder, Encoder};
+use tokio_timer::Interval;
 use url::Url;
 
 mod proto;
@@ -75,8 +77,9 @@ pub enum Command {
     Close,
     Connect,
     Heartbeat,
+    Launch(String),
     Load(Media),
-    Stop,
+    Stop(String),
 }
 
 #[derive(Debug)]
@@ -127,8 +130,7 @@ impl Chromecast {
                 let (write, read) = Framed::new(socket, CastMessageCodec).split();
                 tokio::prelude::task::spawn(read.then(move |message| {
                     let status = status_tx.clone();
-                    let heartbeat = heartbeat.clone();
-                    message.map(|msg| Chromecast::read(msg, status, heartbeat))
+                    message.map(|msg| Chromecast::read(msg, status))
                 }));
                 tokio::prelude::task::spawn(command_rx.forward(write.sink_map_err(|_| ())));
             })
@@ -137,6 +139,18 @@ impl Chromecast {
 
         tokio::run(connect);
         let _ = command_tx.unbounded_send(Command::Connect);
+
+        let heartbeat_interval = Interval::new_interval(Duration::new(5, 0))
+            .for_each(move |_| {
+                println!("Sending heartbeat PING");
+                let _ = heartbeat.unbounded_send(Command::Heartbeat);
+                future::ok(())
+            })
+            .map_err(|_| ());
+        tokio::run(heartbeat_interval);
+
+        std::thread::sleep(Duration::new(5, 0));
+        let _ = command_tx.unbounded_send(Command::Launch("CC1AD845".to_owned()));
         Ok(Channel {
             tx: command_tx,
             rx: status_rx,
@@ -146,7 +160,6 @@ impl Chromecast {
     fn read(
         message: proto::CastMessage,
         tx: UnboundedSender<Status>,
-        command: UnboundedSender<Command>,
     ) {
         if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
             let message_type = message::digs(&reply, &vec!["type"]);
@@ -154,7 +167,7 @@ impl Chromecast {
             match message.get_namespace() {
                 "urn:x-cast:com.google.cast.tp.heartbeat" => {
                     println!("Got heartbeat");
-                    let _ = command.unbounded_send(Command::Heartbeat);
+                    // let _ = command.unbounded_send(Command::Heartbeat);
                 }
                 "urn:x-cast:com.google.cast.tp.connection" => {
                     match message_type {
@@ -196,10 +209,11 @@ impl Encoder for CastMessageCodec {
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let message = match item {
             Command::Connect => message::connect(),
-            Command::Close => message::connect(),
-            Command::Heartbeat => message::pong(),
+            Command::Close => message::close(),
+            Command::Heartbeat => message::ping(),
+            Command::Launch(ref app_id) => message::launch(app_id),
             Command::Load(_) => message::connect(),
-            Command::Stop => message::connect(),
+            Command::Stop(ref session_id) => message::stop(session_id),
         };
         let mut buf = Vec::new();
         match message::encode(message, &mut buf) {
@@ -278,13 +292,43 @@ mod message {
 
     pub fn connect() -> proto::CastMessage {
         let namespace = "urn:x-cast:com.google.cast.tp.connection";
-        let payload = json!({"type": "CONNECT", "origin": {}});
+        let payload = json!({"type": "CONNECT"});
+        message(namespace, payload)
+    }
+
+    pub fn close() -> proto::CastMessage {
+        let namespace = "urn:x-cast:com.google.cast.tp.connection";
+        let payload = json!({"type": "CLOSE"});
+        message(namespace, payload)
+    }
+
+    pub fn ping() -> proto::CastMessage {
+        let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
+        let payload = json!({"type": "PING"});
         message(namespace, payload)
     }
 
     pub fn pong() -> proto::CastMessage {
         let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
         let payload = json!({"type": "PONG"});
+        message(namespace, payload)
+    }
+
+    pub fn launch(app_id: &str) -> proto::CastMessage {
+        let namespace = "urn:x-cast:com.google.cast.receiver";
+        let payload = json!({ "type": "LAUNCH", "appId": app_id });
+        message(namespace, payload)
+    }
+
+    pub fn stop(session_id: &str) -> proto::CastMessage {
+        let namespace = "urn:x-cast:com.google.cast.receiver";
+        let payload = json!({ "type": "STOP", "sessionId": session_id });
+        message(namespace, payload)
+    }
+
+    pub fn status() -> proto::CastMessage {
+        let namespace = "urn:x-cast:com.google.cast.receiver";
+        let payload = json!({ "type": "GET_STATUS" });
         message(namespace, payload)
     }
 
