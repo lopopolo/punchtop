@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, WriteBytesExt};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::error;
 use std::fmt;
@@ -128,29 +129,37 @@ impl Chromecast {
             .map(move |socket| {
                 println!("Chomecast connect successful");
                 let (write, read) = Framed::new(socket, CastMessageCodec).split();
-                tokio::prelude::task::spawn(read.then(move |message| {
-                    let status = status_tx.clone();
-                    message.map(|msg| Chromecast::read(msg, status))
-                }));
-                tokio::prelude::task::spawn(command_rx.forward(write.sink_map_err(|_| ())));
+                let rx = read
+                    .then(move |message| {
+                        let status = status_tx.clone();
+                        message.map(|msg| Chromecast::read(msg, status))
+                    })
+                    .into_future()
+                    .map(|_| ())
+                    .map_err(|_| ());
+                let tx = command_rx
+                    .forward(write.sink_map_err(|err| println!("write err: {:?}", err)))
+                    .map(|_| ())
+                    .map_err(|err| println!("write err: {:?}", err));
+                let heartbeat = Interval::new_interval(Duration::new(5, 0))
+                    .for_each(move |_| {
+                        println!("Sending heartbeat PING");
+                        let r = heartbeat.unbounded_send(Command::Heartbeat);
+                        println!("heartbeat send: {:?}, closed? {:?}", r, heartbeat.is_closed());
+                        future::ok(())
+                    })
+                    .map_err(|_| ());
+                tokio::spawn(rx);
+                tokio::spawn(tx);
+                tokio::spawn(heartbeat);
             })
             .map(|_| ())
             .map_err(|err| println!("Chromecast connect err: {:?}", err));
 
+        println!("connect command: {:?}", command_tx.unbounded_send(Command::Connect));
+        // let _ = command_tx.unbounded_send(Command::Launch("CC1AD845".to_owned()));
         tokio::run(connect);
-        let _ = command_tx.unbounded_send(Command::Connect);
 
-        let heartbeat_interval = Interval::new_interval(Duration::new(5, 0))
-            .for_each(move |_| {
-                println!("Sending heartbeat PING");
-                let _ = heartbeat.unbounded_send(Command::Heartbeat);
-                future::ok(())
-            })
-            .map_err(|_| ());
-        tokio::run(heartbeat_interval);
-
-        std::thread::sleep(Duration::new(5, 0));
-        let _ = command_tx.unbounded_send(Command::Launch("CC1AD845".to_owned()));
         Ok(Channel {
             tx: command_tx,
             rx: status_rx,
@@ -164,6 +173,7 @@ impl Chromecast {
         if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
             let message_type = message::digs(&reply, &vec!["type"]);
             let message_type: &str = message_type.deref().unwrap_or("");
+            println!("{:?} {:?}", message.get_namespace(), message_type);
             match message.get_namespace() {
                 "urn:x-cast:com.google.cast.tp.heartbeat" => {
                     println!("Got heartbeat");
@@ -207,6 +217,7 @@ impl Encoder for CastMessageCodec {
     type Error = protobuf::error::ProtobufError;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        println!("Encoding cast command: {:?}", item);
         let message = match item {
             Command::Connect => message::connect(),
             Command::Close => message::close(),
@@ -218,10 +229,17 @@ impl Encoder for CastMessageCodec {
         let mut buf = Vec::new();
         match message::encode(message, &mut buf) {
             Ok(()) => {
+                let header = {
+                    let mut len = vec![];
+                    len.write_u32::<BigEndian>(buf.len() as u32).unwrap();
+                    len
+                };
+
+                dst.put_slice(&header);
                 dst.put_slice(&buf);
                 Ok(())
             }
-            Err(err) => Err(err),
+            Err(err) => {println!("encoder error: {:?}", err); Err(err)}
         }
     }
 }
