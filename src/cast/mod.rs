@@ -7,8 +7,8 @@ use std::sync::atomic::AtomicUsize;
 
 use futures::sink::Sink;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{future, Async, AsyncSink, Future, Stream};
-use native_tls::{Certificate, TlsConnector};
+use futures::{Future, Stream};
+use native_tls::TlsConnector;
 use serde_json::Value as Json;
 use tokio;
 use tokio::net::TcpStream;
@@ -236,7 +236,7 @@ impl Decoder for CastMessageCodec {
 }
 
 mod message {
-    use protobuf::{CodedOutputStream, Message, ProtobufResult};
+    use protobuf::{CodedOutputStream, ProtobufResult};
     use serde_json::Value as Json;
 
     use super::proto;
@@ -273,8 +273,7 @@ mod message {
     pub fn encode(msg: impl protobuf::Message, buf: &mut Vec<u8>) -> ProtobufResult<()> {
         let mut output = CodedOutputStream::new(buf);
         msg.write_to(&mut output)?;
-        output.flush();
-        Ok(())
+        output.flush()
     }
 
     pub fn connect() -> proto::CastMessage {
