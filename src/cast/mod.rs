@@ -134,24 +134,16 @@ impl Chromecast {
                         let status = status_tx.clone();
                         message.map(|msg| Chromecast::read(msg, status))
                     })
-                    .into_future()
-                    .map(|_| ())
-                    .map_err(|_| ());
+                    .into_future();
                 let tx = command_rx
-                    .forward(write.sink_map_err(|err| println!("write err: {:?}", err)))
-                    .map(|_| ())
-                    .map_err(|err| println!("write err: {:?}", err));
+                    .forward(write.sink_map_err(|_| ()));
                 let heartbeat = Interval::new_interval(Duration::new(5, 0))
-                    .for_each(move |_| {
-                        println!("Sending heartbeat PING");
-                        let r = heartbeat.unbounded_send(Command::Heartbeat);
-                        println!("heartbeat send: {:?}, closed? {:?}", r, heartbeat.is_closed());
-                        future::ok(())
-                    })
-                    .map_err(|_| ());
-                tokio::spawn(rx);
-                tokio::spawn(tx);
-                tokio::spawn(heartbeat);
+                    .map(|_| Command::Heartbeat)
+                    .map_err(|_| ())
+                    .forward(heartbeat.sink_map_err(|_| ()));
+                tokio::spawn(rx.map(|_| ()).map_err(|_| ()));
+                tokio::spawn(tx.map(|_| ()).map_err(|_| ()));
+                tokio::spawn(heartbeat.map(|_| ()).map_err(|_| ()));
             })
             .map(|_| ())
             .map_err(|err| println!("Chromecast connect err: {:?}", err));
