@@ -52,7 +52,7 @@ pub fn players(config: Config) -> Players {
     }
     for chromecast in chromecast::devices(config.clone()) {
         println!("Found chromecast device: {}", chromecast.name());
-        devices.push(Box::new(chromecast));
+        //devices.push(Box::new(chromecast));
     }
     Players(devices.into_iter())
 }

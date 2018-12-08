@@ -109,16 +109,16 @@ pub struct Device {
     media_server_bind_addr: Option<SocketAddr>,
 }
 
-impl Player for Device {
-    fn name(&self) -> String {
+impl Device {
+    pub fn name(&self) -> String {
         self.connect_config.name().to_owned()
     }
 
-    fn kind(&self) -> PlayerKind {
+    pub fn kind(&self) -> PlayerKind {
         PlayerKind::Chromecast
     }
 
-    fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
+    pub fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
         match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
@@ -131,7 +131,7 @@ impl Player for Device {
         }
     }
 
-    fn close(&self) -> backend::Result {
+    pub fn close(&self) -> backend::Result {
         if let Some((ref cast, _)) = self.cast {
             cast.stop();
             cast.close();
@@ -139,7 +139,7 @@ impl Player for Device {
         Ok(())
     }
 
-    fn play(&self, track: Track) -> backend::Result {
+    pub fn play(&self, track: Track) -> backend::Result {
         let (cast, session_id) = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self.media_server_bind_addr.ok_or(Error::BackendNotInitialized)?;
         let track = CastTrack {

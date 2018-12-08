@@ -51,7 +51,7 @@ fn main() {
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
-    let player = backend::players(config.clone())
+    let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
@@ -59,17 +59,9 @@ fn main() {
 
         match backend.connect(&mut rt) {
             Ok(_) => {
-                thread::sleep(Duration::new(60, 0));
                 playlist.next().map(|track| {
                     backend.play(track)
                 });
-                for track in playlist {
-                    println!("{:?}", track);
-                    if let Err(err) = backend.play(track) {
-                        println!("Error during playback: {:?}", err);
-                        continue;
-                    }
-                }
             }
             Err(err) => println!("Error when connecting: {:?}", err),
         }
