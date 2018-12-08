@@ -23,6 +23,8 @@ mod proto;
 
 use self::payload::Payload;
 
+const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
+
 #[derive(Clone, Debug)]
 pub struct Media {
     pub title: Option<String>,
@@ -80,13 +82,13 @@ pub enum Command {
     Close,
     Connect,
     Heartbeat,
-    Launch(i64, String),
-    Load(i64, Media),
-    Pause(i64),
-    Play(i64),
-    Seek(i64, f32),
-    Status(i64),
-    Stop(i64, String),
+    Launch(i32, String),
+    Load(i32, Media),
+    Pause(i32),
+    Play(i32),
+    Seek(i32, f32),
+    Status(i32),
+    Stop(i32, String),
 }
 
 #[derive(Debug)]
@@ -138,15 +140,15 @@ impl Chromecast {
             })
             .map(move |socket| {
                 println!("Chomecast connect successful");
-                let (write, read) = Framed::new(socket, CastMessageCodec).split();
+                let (write, read) = Framed::new(socket, CastMessageCodec::new()).split();
                 let rx = read
-                    .then(move |message| {
+                    .for_each(move |message| {
+                        println!("read stream got item: {:?}", message);
                         let status = status_tx.clone();
                         let command = command.clone();
                         let req_id = Arc::clone(&send_req_id);
-                        message.map(|msg| Chromecast::read(msg, status, command, req_id))
-                    })
-                    .into_future();
+                        Ok(Chromecast::read(message, status, command, req_id))
+                    });
                 let tx = command_rx
                     .forward(write.sink_map_err(|_| ()));
                 let heartbeat = Interval::new_interval(Duration::new(5, 0))
@@ -161,10 +163,6 @@ impl Chromecast {
             .map_err(|err| println!("Chromecast connect err: {:?}", err));
 
         println!("connect command: {:?}", command_tx.unbounded_send(Command::Connect));
-        let _ = command_tx.unbounded_send(
-            Command::Launch(req_id.fetch_add(1usize, Ordering::SeqCst) as i64,
-            "CC1AD845".to_owned())
-        );
         tokio::run(connect);
 
         Ok(Channel {
@@ -179,20 +177,21 @@ impl Chromecast {
         command: UnboundedSender<Command>,
         req_id: Arc<AtomicUsize>,
     ) {
+        println!("command closed? {:?}", command.is_closed());
         match message {
-            Payload::Pong {} => {
+            Payload::Pong => {
                 println!("Got PONG from receiver");
-                println!("{:?}", command.unbounded_send(
-                        Command::Status(
-                            req_id.fetch_add(1usize, Ordering::SeqCst) as i64
-                        )));
+                let _ = command.unbounded_send(
+                    Command::Launch(req_id.fetch_add(1usize, Ordering::SeqCst) as i32,
+                    "CC1AD845".to_owned())
+                );
             }
             Payload::ReceiverStatus { request_id, status } => {
                 println!("got status for req id: {}", request_id);
                 println!("status: {:?}", status);
                 println!("{:?}", command.unbounded_send(
                         Command::Status(
-                            req_id.fetch_add(1usize, Ordering::SeqCst) as i64
+                            req_id.fetch_add(1usize, Ordering::SeqCst) as i32
                         )));
             }
             payload => println!("unknown payload: {:?}", payload),
@@ -200,7 +199,14 @@ impl Chromecast {
     }
 }
 
-struct CastMessageCodec;
+enum DecodeState {
+    Header,
+    Payload(usize),
+}
+
+struct CastMessageCodec {
+    state: DecodeState,
+}
 
 impl Encoder for CastMessageCodec {
     type Item = Command;
@@ -235,33 +241,65 @@ impl Encoder for CastMessageCodec {
     }
 }
 
-impl Decoder for CastMessageCodec {
-    type Item = Payload;
-    type Error = io::Error;
+impl CastMessageCodec {
+    fn new() -> Self {
+        CastMessageCodec { state: DecodeState::Header }
+    }
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode_header(&mut self, src: &mut BytesMut) -> Option<usize> {
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
         // At least 4 bytes are required to decode the next frame.
-        println!("decode attempt");
-        if src.len() < 4 {
-            return Ok(None);
+        if src.len() < CAST_MESSAGE_HEADER_LENGTH {
+            return None;
         }
         let header = src.split_to(4);
         let length = {
             let mut header = header.into_buf();
             header.get_u32_be() as usize
         };
-        if src.len() < length {
-            return Ok(None);
+        src.reserve(length);
+        Some(length)
+    }
+
+    fn decode_payload(&self, n: usize, src: &mut BytesMut) -> Option<BytesMut> {
+        if src.len() < n {
+            return None;
         }
-        src.truncate(length);
-        // TODO: remove this excessive logging, or convert them to trace level logs.
-        let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
-            .map_err(|err| {println!("decode error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})?;
-        println!("payload: {:?}", message.get_payload_utf8());
-        serde_json::from_str::<Payload>(message.get_payload_utf8())
-            .map_err(|err| {println!("decode error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})
-            .map(Some)
+        Some(src.split_to(n))
+    }
+}
+
+impl Decoder for CastMessageCodec {
+    type Item = Payload;
+    type Error = io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        println!("decode attempt: {:?} {:?}", src.len(), src);
+        let n = match self.state {
+            DecodeState::Header => {
+                match self.decode_header(src) {
+                    Some(n) => {
+                        self.state = DecodeState::Payload(n);
+                        n
+                    }
+                    None => return Ok(None),
+                }
+            }
+            DecodeState::Payload(n) => n,
+        };
+        match self.decode_payload(n, src) {
+            Some(src) => {
+                self.state = DecodeState::Header;
+                //src.reserve(CAST_MESSAGE_HEADER_LENGTH);
+                println!("{:?}", src);
+                let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
+                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                serde_json::from_str::<Payload>(message.get_payload_utf8())
+                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                .map(Some)
+            }
+            None => return Ok(None),
+        }
     }
 }
 
@@ -304,7 +342,7 @@ mod message {
         Ok(message(namespace, payload))
     }
 
-    pub fn launch(request_id: i64, app_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
+    pub fn launch(request_id: i32, app_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&Payload::Launch {
             request_id,
@@ -313,7 +351,7 @@ mod message {
         Ok(message(namespace, payload))
     }
 
-    pub fn stop(request_id: i64, session_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
+    pub fn stop(request_id: i32, session_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&Payload::Stop {
             request_id,
@@ -322,7 +360,7 @@ mod message {
         Ok(message(namespace, payload))
     }
 
-    pub fn status(request_id: i64) -> Result<proto::CastMessage, serde_json::Error> {
+    pub fn status(request_id: i32) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&Payload::GetStatus { request_id })?;
         Ok(message(namespace, payload))
@@ -335,7 +373,7 @@ mod message {
         msg.set_namespace(namespace.to_owned());
         msg.set_source_id(DEFAULT_SENDER_ID.to_owned());
         msg.set_destination_id(DEFAULT_DESTINATION_ID.to_owned());
-        msg.set_payload_utf8(format!("{}", payload));
+        msg.set_payload_utf8(payload);
         msg
     }
 }
