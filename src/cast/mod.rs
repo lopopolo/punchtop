@@ -9,13 +9,11 @@ use std::time::Duration;
 
 use futures::sink::Sink;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{future, Future, Stream};
+use futures::{Future, Stream};
 use native_tls::TlsConnector;
 use serde_json::Value as Json;
-use tokio;
+use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
-use tokio_codec::Framed;
-use tokio_io::codec::{Decoder, Encoder};
 use tokio::timer::Interval;
 use url::Url;
 
@@ -149,7 +147,7 @@ impl Chromecast {
             .map_err(|err| println!("Chromecast connect err: {:?}", err));
 
         println!("connect command: {:?}", command_tx.unbounded_send(Command::Connect));
-        // let _ = command_tx.unbounded_send(Command::Launch("CC1AD845".to_owned()));
+        let _ = command_tx.unbounded_send(Command::Launch("CC1AD845".to_owned()));
         tokio::run(connect);
 
         Ok(Channel {
