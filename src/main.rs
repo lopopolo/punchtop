@@ -55,11 +55,13 @@ fn main() {
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
-        let playlist = playlist::Playlist::from_directory(config);
+        let mut playlist = playlist::Playlist::from_directory(config);
 
         match backend.connect(&mut rt) {
             Ok(_) => {
-                rt.shutdown_on_idle().wait().unwrap();
+                playlist.next().map(|track| {
+                    backend.play(track)
+                });
                 for track in playlist {
                     println!("{:?}", track);
                     if let Err(err) = backend.play(track) {
@@ -72,4 +74,5 @@ fn main() {
         }
         let _ = backend.close();
     }
+    rt.shutdown_on_idle().wait().unwrap();
 }
