@@ -265,25 +265,25 @@ mod message {
 
     pub fn connect() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.connection";
-        let payload = serde_json::to_string(&Payload::Connect {})?;
+        let payload = serde_json::to_string(&Payload::Connect)?;
         Ok(message(namespace, payload))
     }
 
     pub fn close() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.connection";
-        let payload = serde_json::to_string(&Payload::Close {})?;
+        let payload = serde_json::to_string(&Payload::Close)?;
         Ok(message(namespace, payload))
     }
 
     pub fn ping() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
-        let payload = serde_json::to_string(&Payload::Ping {})?;
+        let payload = serde_json::to_string(&Payload::Ping)?;
         Ok(message(namespace, payload))
     }
 
     pub fn pong() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
-        let payload = serde_json::to_string(&Payload::Pong {})?;
+        let payload = serde_json::to_string(&Payload::Pong)?;
         Ok(message(namespace, payload))
     }
 

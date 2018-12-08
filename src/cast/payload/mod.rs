@@ -3,10 +3,10 @@ use std::vec::Vec;
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Payload {
-    Connect {},
-    Close {},
-    Ping {},
-    Pong {},
+    Connect,
+    Close,
+    Ping,
+    Pong,
     #[serde(rename_all = "camelCase")]
     Launch { request_id: i64, app_id: String },
     #[serde(rename_all = "camelCase")]
@@ -23,9 +23,9 @@ pub enum Payload {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     #[serde(default)]
-    pub applications: Option<Vec<Applications>>,
+    pub applications: Vec<Applications>,
     #[serde(default)]
-    pub is_active_input: Option<bool>,
+    pub is_active_input: bool,
     pub volume: Volume,
 }
 
