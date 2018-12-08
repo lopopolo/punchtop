@@ -181,18 +181,10 @@ impl Chromecast {
         match message {
             Payload::Pong => {
                 println!("Got PONG from receiver");
-                let _ = command.unbounded_send(
-                    Command::Launch(req_id.fetch_add(1usize, Ordering::SeqCst) as i32,
-                    "CC1AD845".to_owned())
-                );
             }
             Payload::ReceiverStatus { request_id, status } => {
                 println!("got status for req id: {}", request_id);
                 println!("status: {:?}", status);
-                println!("{:?}", command.unbounded_send(
-                        Command::Status(
-                            req_id.fetch_add(1usize, Ordering::SeqCst) as i32
-                        )));
             }
             payload => println!("unknown payload: {:?}", payload),
         }
