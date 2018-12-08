@@ -8,16 +8,32 @@ pub enum Payload {
     Ping,
     Pong,
     #[serde(rename_all = "camelCase")]
-    Launch { request_id: i32, app_id: String },
+    Launch {
+        request_id: i32,
+        app_id: String,
+    },
     #[serde(rename_all = "camelCase")]
-    Stop { request_id: i32, session_id: String },
+    Stop {
+        request_id: i32,
+        session_id: String,
+    },
     #[serde(rename_all = "camelCase")]
-    GetStatus { request_id: i32 },
+    GetStatus {
+        request_id: i32,
+    },
     #[serde(rename_all = "camelCase")]
-    GetAppAvailability { request_id: i32, app_id: Vec<String> },
+    GetAppAvailability {
+        request_id: i32,
+        app_id: Vec<String>,
+    },
     #[serde(rename_all = "camelCase")]
-    ReceiverStatus { request_id: i32, status: Status },
-    SetVolume { volume: Volume },
+    ReceiverStatus {
+        request_id: i32,
+        status: Status,
+    },
+    SetVolume {
+        volume: Volume,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]

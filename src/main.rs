@@ -37,8 +37,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-use tokio::runtime::Runtime;
 use tokio::prelude::*;
+use tokio::runtime::Runtime;
 
 use backend::PlayerKind;
 

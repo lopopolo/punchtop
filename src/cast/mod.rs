@@ -4,8 +4,8 @@ use std::error;
 use std::fmt;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::sink::Sink;
@@ -110,7 +110,10 @@ pub struct Chromecast {
 
 impl Chromecast {
     pub fn stop(&self, app_id: &str) {
-        let _ = self.chan.tx.unbounded_send(Command::Stop(app_id.to_owned()));
+        let _ = self
+            .chan
+            .tx
+            .unbounded_send(Command::Stop(app_id.to_owned()));
     }
 
     pub fn close(&self) {
@@ -145,61 +148,73 @@ pub fn connect(rt: &mut Runtime, addr: SocketAddr) -> Result<Chromecast, Error> 
             cx.connect(&format!("{}", addr.ip()), socket)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         })
-    .map(move |socket| {
-        info!("Chomecast connect successful");
-        let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-        let rx = source
-            .for_each(move |message| {
-                let status = status_tx.clone();
-                let command = command.clone();
-                Ok(read(message, status, command))
-            })
+        .map(move |socket| {
+            info!("Chomecast connect successful");
+            let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
+            let rx = source
+                .for_each(move |message| {
+                    let status = status_tx.clone();
+                    let command = command.clone();
+                    Ok(read(message, status, command))
+                })
+                .map(|_| ())
+                .map_err(|err| {
+                    warn!(
+                        "Error running future Chromecast TLS payload reader: {:?}",
+                        err
+                    )
+                });
+            let tx = command_rx
+                .forward(sink.sink_map_err(|_| ()))
+                .map(|_| ())
+                .map_err(|err| {
+                    warn!(
+                        "Error running future Chromecast receiver channel: {:?}",
+                        err
+                    )
+                });
+            let heartbeat = Interval::new_interval(Duration::new(5, 0))
+                .map(|_| Command::Heartbeat)
+                .map_err(|_| ())
+                .forward(heartbeat.sink_map_err(|_| ()))
+                .map(|_| ())
+                .map_err(|err| {
+                    warn!(
+                        "Error running future Chromecast heartbeat channel: {:?}",
+                        err
+                    )
+                });
+            tokio::spawn(rx);
+            tokio::spawn(tx);
+            tokio::spawn(heartbeat);
+        })
         .map(|_| ())
-            .map_err(|err| {
-                warn!("Error running future Chromecast TLS payload reader: {:?}", err)
-            });
-        let tx = command_rx
-            .forward(sink.sink_map_err(|_| ()))
-            .map(|_| ())
-            .map_err(|err| {
-                warn!("Error running future Chromecast receiver channel: {:?}", err)
-            });
-        let heartbeat = Interval::new_interval(Duration::new(5, 0))
-            .map(|_| Command::Heartbeat)
-            .map_err(|_| ())
-            .forward(heartbeat.sink_map_err(|_| ()))
-            .map(|_| ())
-            .map_err(|err| {
-                warn!("Error running future Chromecast heartbeat channel: {:?}", err)
-            });
-        tokio::spawn(rx);
-        tokio::spawn(tx);
-        tokio::spawn(heartbeat);
-    })
-    .map(|_| ())
-        .map_err(|err| {
-            warn!("Error running future Chromecast connect: {:?}", err)
-        });
+        .map_err(|err| warn!("Error running future Chromecast connect: {:?}", err));
 
     rt.spawn(connect);
-    cast.chan.tx.unbounded_send(Command::Connect)
-        .and_then(|_| cast.chan.tx.unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned())))
+    cast.chan
+        .tx
+        .unbounded_send(Command::Connect)
+        .and_then(|_| {
+            cast.chan
+                .tx
+                .unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned()))
+        })
         .map(|_| cast)
         .map_err(|_| Error::Connect)
 }
 
-fn read(
-    message: Payload,
-    tx: UnboundedSender<Status>,
-    command: UnboundedSender<Command>,
-    ) {
+fn read(message: Payload, tx: UnboundedSender<Status>, command: UnboundedSender<Command>) {
     debug!("Message on receiver channel");
     match message {
         Payload::Pong => {
             debug!("Got PONG");
         }
         Payload::ReceiverStatus { request_id, status } => {
-            debug!("Got reciver status request_id={} status={:?}", request_id, status);
+            debug!(
+                "Got reciver status request_id={} status={:?}",
+                request_id, status
+            );
         }
         payload => warn!("Got unknown payload: {:?}", payload),
     }
@@ -232,7 +247,10 @@ impl Encoder for CastMessageCodec {
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let counter = self.encode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
-        debug!("CastMessageCodec encode-attempt={} command={:?}", counter, item);
+        debug!(
+            "CastMessageCodec encode-attempt={} command={:?}",
+            counter, item
+        );
         let message = match item {
             Command::Close => message::close(),
             Command::Connect => message::connect(),
@@ -295,15 +313,13 @@ impl Decoder for CastMessageCodec {
         let counter = self.decode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
         debug!("Decoding message {}", counter);
         let n = match self.state {
-            DecodeState::Header => {
-                match self.decode_header(src) {
-                    Some(n) => {
-                        self.state = DecodeState::Payload(n);
-                        n
-                    }
-                    None => return Ok(None),
+            DecodeState::Header => match self.decode_header(src) {
+                Some(n) => {
+                    self.state = DecodeState::Payload(n);
+                    n
                 }
-            }
+                None => return Ok(None),
+            },
             DecodeState::Payload(n) => n,
         };
         match self.decode_payload(n, src) {
@@ -364,12 +380,15 @@ mod message {
         let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&Payload::Launch {
             request_id,
-            app_id: app_id.to_owned()
+            app_id: app_id.to_owned(),
         })?;
         Ok(message(namespace, payload))
     }
 
-    pub fn stop(request_id: i32, session_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
+    pub fn stop(
+        request_id: i32,
+        session_id: &str,
+    ) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&Payload::Stop {
             request_id,
