@@ -21,7 +21,7 @@ pub mod heartbeat {
 }
 
 pub mod media {
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.media";
+    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
     const METADATA_TYPE_GENERIC: u32 = 0;
     const METADATA_TYPE_MOVIE: u32 = 1;
@@ -223,7 +223,7 @@ pub mod media {
 }
 
 pub mod receiver {
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.receiver";
+    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.receiver";
 
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
