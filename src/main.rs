@@ -2,11 +2,12 @@
 
 extern crate byteorder;
 extern crate bytes;
+extern crate env_logger;
 extern crate floating_duration;
 extern crate futures;
 extern crate hostname;
-// #[macro_use]
-// extern crate log;
+#[macro_use]
+extern crate log;
 extern crate mdns;
 extern crate mp3_duration;
 extern crate native_tls;
@@ -42,6 +43,7 @@ mod cast;
 mod playlist;
 
 fn main() {
+    env_logger::init();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
     let player = backend::players(config.clone())

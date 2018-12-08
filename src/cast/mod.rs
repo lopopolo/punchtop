@@ -12,7 +12,6 @@ use futures::sink::Sink;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{Future, Stream};
 use native_tls::TlsConnector;
-use rand::{thread_rng, Rng};
 use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
 use tokio::timer::Interval;
@@ -24,6 +23,7 @@ mod proto;
 use self::payload::Payload;
 
 const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
+const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
 
 #[derive(Clone, Debug)]
 pub struct Media {
@@ -82,13 +82,13 @@ pub enum Command {
     Close,
     Connect,
     Heartbeat,
-    Launch(i32, String),
-    Load(i32, Media),
-    Pause(i32),
-    Play(i32),
-    Seek(i32, f32),
-    Status(i32),
-    Stop(i32, String),
+    Launch(String),
+    Load(Media),
+    Pause,
+    Play,
+    Seek(f32),
+    Status,
+    Stop(String),
 }
 
 #[derive(Debug)]
@@ -116,9 +116,6 @@ pub struct Chromecast {
 
 impl Chromecast {
     pub fn connect(addr: SocketAddr) -> Result<Channel<Command, Status>, Error> {
-        //let req_id = Arc::new(AtomicUsize::new(thread_rng().gen_range(0 as usize, 1 << 20 as usize)));
-        let req_id = Arc::new(AtomicUsize::new(0));
-        let send_req_id = Arc::clone(&req_id);
         let socket = TcpStream::connect(&addr);
         let cx = TlsConnector::builder()
             .danger_accept_invalid_hostnames(true)
@@ -134,59 +131,72 @@ impl Chromecast {
 
         let connect = socket
             .and_then(move |socket| {
-                println!("Establishing TLS connection with Chromecast");
+                info!("Establishing TLS connection with Chromecast");
                 cx.connect(&format!("{}", addr.ip()), socket)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
             })
             .map(move |socket| {
-                println!("Chomecast connect successful");
+                info!("Chomecast connect successful");
                 let (write, read) = Framed::new(socket, CastMessageCodec::new()).split();
                 let rx = read
                     .for_each(move |message| {
-                        println!("read stream got item: {:?}", message);
                         let status = status_tx.clone();
                         let command = command.clone();
-                        let req_id = Arc::clone(&send_req_id);
-                        Ok(Chromecast::read(message, status, command, req_id))
+                        Ok(Chromecast::read(message, status, command))
+                    })
+                    .map(|_| ())
+                    .map_err(|err| {
+                        warn!("Error running future Chromecast TLS payload reader: {:?}", err)
                     });
                 let tx = command_rx
-                    .forward(write.sink_map_err(|_| ()));
+                    .forward(write.sink_map_err(|_| ()))
+                    .map(|_| ())
+                    .map_err(|err| {
+                        warn!("Error running future Chromecast receiver channel: {:?}", err)
+                    });
                 let heartbeat = Interval::new_interval(Duration::new(5, 0))
                     .map(|_| Command::Heartbeat)
                     .map_err(|_| ())
-                    .forward(heartbeat.sink_map_err(|_| ()));
-                tokio::spawn(rx.map(|_| ()).map_err(|_| println!("rx error")));
-                tokio::spawn(tx.map(|_| ()).map_err(|e| println!("tx {:?}", e)));
-                tokio::spawn(heartbeat.map(|_| ()).map_err(|e| println!("heartbeat {:?}", e)));
+                    .forward(heartbeat.sink_map_err(|_| ()))
+                    .map(|_| ())
+                    .map_err(|err| {
+                        warn!("Error running future Chromecast heartbeat channel: {:?}", err)
+                    });
+                tokio::spawn(rx);
+                tokio::spawn(tx);
+                tokio::spawn(heartbeat);
             })
             .map(|_| ())
-            .map_err(|err| println!("Chromecast connect err: {:?}", err));
+            .map_err(|err| {
+                warn!("Error running future Chromecast connect: {:?}", err)
+            });
 
-        println!("connect command: {:?}", command_tx.unbounded_send(Command::Connect));
+        let _ = command_tx.unbounded_send(Command::Connect)
+            .and_then(|_| command_tx.unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned())))
+            .map(|_| Channel {
+                tx: command_tx,
+                rx: status_rx,
+            })
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err));
         tokio::run(connect);
 
-        Ok(Channel {
-            tx: command_tx,
-            rx: status_rx,
-        })
+        Err(Error::Connect)
     }
 
     fn read(
         message: Payload,
         tx: UnboundedSender<Status>,
         command: UnboundedSender<Command>,
-        req_id: Arc<AtomicUsize>,
     ) {
-        println!("command closed? {:?}", command.is_closed());
+        debug!("Message on receiver channel");
         match message {
             Payload::Pong => {
-                println!("Got PONG from receiver");
+                debug!("Got PONG");
             }
             Payload::ReceiverStatus { request_id, status } => {
-                println!("got status for req id: {}", request_id);
-                println!("status: {:?}", status);
+                debug!("Got reciver status request_id={} status={:?}", request_id, status);
             }
-            payload => println!("unknown payload: {:?}", payload),
+            payload => warn!("Got unknown payload: {:?}", payload),
         }
     }
 }
@@ -198,6 +208,18 @@ enum DecodeState {
 
 struct CastMessageCodec {
     state: DecodeState,
+    decode_counter: Arc<AtomicUsize>,
+    encode_counter: Arc<AtomicUsize>,
+}
+
+impl CastMessageCodec {
+    fn new() -> Self {
+        CastMessageCodec {
+            state: DecodeState::Header,
+            decode_counter: Arc::new(AtomicUsize::new(0)),
+            encode_counter: Arc::new(AtomicUsize::new(0)),
+        }
+    }
 }
 
 impl Encoder for CastMessageCodec {
@@ -205,28 +227,31 @@ impl Encoder for CastMessageCodec {
     type Error = io::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        println!("Encoding cast command: {:?}", item);
+        let counter = self.encode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
+        debug!("CastMessageCodec encode-attempt={} command={:?}", counter, item);
         let message = match item {
             Command::Close => message::close(),
             Command::Connect => message::connect(),
             Command::Heartbeat => message::ping(),
-            Command::Launch(req_id, ref app_id) => message::launch(req_id, app_id),
-            Command::Load(_, _) => unimplemented!(),
-            Command::Pause(_) => unimplemented!(),
-            Command::Play(_) => unimplemented!(),
-            Command::Seek(_, _) => unimplemented!(),
-            Command::Status(req_id) => message::status(req_id),
-            Command::Stop(req_id, ref session_id) => message::stop(req_id, session_id),
+            Command::Launch(ref app_id) => message::launch(counter, app_id),
+            Command::Load(_) => unimplemented!(),
+            Command::Pause => unimplemented!(),
+            Command::Play => unimplemented!(),
+            Command::Seek(_) => unimplemented!(),
+            Command::Status => message::status(counter),
+            Command::Stop(ref session_id) => message::stop(counter, session_id),
         };
-        let message = message.map_err(|err| {println!("msg gen error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})?;
-        println!("message: {:?}", message);
+
+        let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
         message::encode(message, &mut buf)
-            .map_err(|err| {println!("msg gen error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})?;
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
-        let header = &mut [0u8; 4];
+        let header = &mut [0; 4];
         BigEndian::write_u32(header, buf.len() as u32);
 
+        dst.reserve(CAST_MESSAGE_HEADER_LENGTH + buf.len());
         dst.put_slice(header);
         dst.put_slice(&buf);
         Ok(())
@@ -234,10 +259,6 @@ impl Encoder for CastMessageCodec {
 }
 
 impl CastMessageCodec {
-    fn new() -> Self {
-        CastMessageCodec { state: DecodeState::Header }
-    }
-
     fn decode_header(&mut self, src: &mut BytesMut) -> Option<usize> {
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
         // At least 4 bytes are required to decode the next frame.
@@ -266,7 +287,8 @@ impl Decoder for CastMessageCodec {
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        println!("decode attempt: {:?} {:?}", src.len(), src);
+        let counter = self.decode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
+        debug!("Decoding message {}", counter);
         let n = match self.state {
             DecodeState::Header => {
                 match self.decode_header(src) {
@@ -280,10 +302,9 @@ impl Decoder for CastMessageCodec {
             DecodeState::Payload(n) => n,
         };
         match self.decode_payload(n, src) {
-            Some(src) => {
+            Some(mut src) => {
                 self.state = DecodeState::Header;
-                //src.reserve(CAST_MESSAGE_HEADER_LENGTH);
-                println!("{:?}", src);
+                src.reserve(CAST_MESSAGE_HEADER_LENGTH);
                 let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 serde_json::from_str::<Payload>(message.get_payload_utf8())
