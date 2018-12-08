@@ -11,6 +11,7 @@ pub enum Payload {
     Launch { request_id: i64, app_id: String },
     #[serde(rename_all = "camelCase")]
     Stop { request_id: i64, session_id: String },
+    #[serde(rename_all = "camelCase")]
     GetStatus { request_id: i64 },
     #[serde(rename_all = "camelCase")]
     GetAppAvailability { request_id: i64, app_id: Vec<String> },
