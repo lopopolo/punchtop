@@ -11,13 +11,15 @@ use futures::sink::Sink;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{Future, Stream};
 use native_tls::TlsConnector;
-use serde_json::Value as Json;
 use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
 use tokio::timer::Interval;
 use url::Url;
 
+mod payload;
 mod proto;
+
+use self::payload::Payload;
 
 #[derive(Clone, Debug)]
 pub struct Media {
@@ -78,6 +80,10 @@ pub enum Command {
     Heartbeat,
     Launch(String),
     Load(Media),
+    Pause,
+    Play,
+    Seek(f32),
+    Status,
     Stop(String),
 }
 
@@ -116,6 +122,7 @@ impl Chromecast {
 
         let (command_tx, command_rx) = unbounded();
         let (status_tx, status_rx) = unbounded();
+        let command = command_tx.clone();
         let heartbeat = command_tx.clone();
 
         let connect = socket
@@ -130,7 +137,8 @@ impl Chromecast {
                 let rx = read
                     .then(move |message| {
                         let status = status_tx.clone();
-                        message.map(|msg| Chromecast::read(msg, status))
+                        let command = command.clone();
+                        message.map(|msg| Chromecast::read(msg, status, command))
                     })
                     .into_future();
                 let tx = command_rx
@@ -157,45 +165,21 @@ impl Chromecast {
     }
 
     fn read(
-        message: proto::CastMessage,
+        message: Payload,
         tx: UnboundedSender<Status>,
+        command: UnboundedSender<Command>
     ) {
-        if let Ok(reply) = serde_json::from_str::<Json>(message.get_payload_utf8()) {
-            let message_type = message::digs(&reply, &vec!["type"]);
-            let message_type: &str = message_type.deref().unwrap_or("");
-            println!("{:?} {:?}", message.get_namespace(), message_type);
-            match message.get_namespace() {
-                "urn:x-cast:com.google.cast.tp.heartbeat" => {
-                    println!("Got heartbeat");
-                    // let _ = command.unbounded_send(Command::Heartbeat);
-                }
-                "urn:x-cast:com.google.cast.tp.connection" => {
-                    match message_type {
-                        "CLOSE" => {
-                            // debug!("Chromecast connection close");
-                        }
-                        _ => {}
-                    }
-                }
-                "urn:x-cast:com.google.cast.media" => {
-                    let _ = match message_type {
-                        "MEDIA_STATUS" => Ok(()),
-                        "LOAD_CANCELLED" => tx.unbounded_send(Status::LoadCancelled),
-                        "LOAD_FAILED" => tx.unbounded_send(Status::LoadFailed),
-                        "INVALID_PLAYER_STATE" => tx.unbounded_send(Status::InvalidPlayerState),
-                        "INVALID_REQUEST" => tx.unbounded_send(Status::InvalidRequest),
-                        _ => Ok(()),
-                    };
-                }
-                "urn:x-cast:com.google.cast.receiver" => match message_type {
-                    "RECEIVER_STATUS" => {
-                        let level = message::digf(&reply, &vec!["status", "volume", "level"]);
-                        let muted = message::digb(&reply, &vec!["status", "volume", "muted"]);
-                    }
-                    _ => {}
-                },
-                _ => {}
+        match message {
+            Payload::Pong {} => {
+                println!("Got PONG from receiver");
+                println!("{:?}", command.unbounded_send(Command::Status));
             }
+            Payload::ReceiverStatus { request_id, status } => {
+                println!("got status for req id: {}", request_id);
+                println!("status: {:?}", status);
+                println!("{:?}", command.unbounded_send(Command::Status));
+            }
+            payload => println!("unknown payload: {:?}", payload),
         }
     }
 }
@@ -204,39 +188,39 @@ struct CastMessageCodec;
 
 impl Encoder for CastMessageCodec {
     type Item = Command;
-    type Error = protobuf::error::ProtobufError;
+    type Error = io::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         println!("Encoding cast command: {:?}", item);
         let message = match item {
-            Command::Connect => message::connect(),
             Command::Close => message::close(),
+            Command::Connect => message::connect(),
             Command::Heartbeat => message::ping(),
             Command::Launch(ref app_id) => message::launch(app_id),
-            Command::Load(_) => message::connect(),
+            Command::Load(_) => unimplemented!(),
+            Command::Pause => unimplemented!(),
+            Command::Play => unimplemented!(),
+            Command::Seek(_) => unimplemented!(),
+            Command::Status => message::status(),
             Command::Stop(ref session_id) => message::stop(session_id),
         };
+        let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
-        match message::encode(message, &mut buf) {
-            Ok(()) => {
-                // Cast wire protocol is a 4-byte big endian length-prefixed
-                // protobuf.
-                let mut header = &mut [0u8; 4];
-                BigEndian::write_u32(header, buf.len() as u32);
+        message::encode(message, &mut buf)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
+        let header = &mut [0u8; 4];
+        BigEndian::write_u32(header, buf.len() as u32);
 
-                dst.put_slice(header);
-                dst.put_slice(&buf);
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+        dst.put_slice(header);
+        dst.put_slice(&buf);
+        Ok(())
     }
 }
 
 impl Decoder for CastMessageCodec {
-    // TODO: this should be a higher level type that includes the decoded JSON payload
-    type Item = proto::CastMessage;
-    type Error = protobuf::error::ProtobufError;
+    type Item = Payload;
+    type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
@@ -253,7 +237,13 @@ impl Decoder for CastMessageCodec {
             return Ok(None);
         }
         src.truncate(length);
-        protobuf::parse_from_bytes::<proto::CastMessage>(&src).map(|msg| Some(msg))
+        // TODO: remove this excessive logging, or convert them to trace level logs.
+        let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
+            .map_err(|err| {println!("decode error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})?;
+        println!("payload: {:?}", message.get_payload_utf8());
+        serde_json::from_str::<Payload>(message.get_payload_utf8())
+            .map_err(|err| {println!("decode error: {:?}", err); io::Error::new(io::ErrorKind::Other, err)})
+            .map(Some)
     }
 }
 
@@ -261,36 +251,11 @@ mod message {
     use protobuf::{CodedOutputStream, ProtobufResult};
     use serde_json::Value as Json;
 
+    use super::payload::Payload;
     use super::proto;
 
     const DEFAULT_SENDER_ID: &str = "sender-0";
     const DEFAULT_DESTINATION_ID: &str = "receiver-0";
-
-    pub fn digs<'a>(obj: &'a Json, keys: &[&str]) -> Option<String> {
-        dig(obj, keys).and_then(|obj| obj.as_str().map(String::from))
-    }
-
-    pub fn digf<'a>(obj: &'a Json, keys: &[&str]) -> Option<f64> {
-        dig(obj, keys).and_then(|obj| obj.as_f64())
-    }
-
-    pub fn digb<'a>(obj: &'a Json, keys: &[&str]) -> Option<bool> {
-        dig(obj, keys).and_then(|obj| obj.as_bool())
-    }
-
-    pub fn dig<'a>(obj: &'a Json, keys: &[&str]) -> Option<Json> {
-        let mut curr = obj;
-        for key in keys {
-            let elem = curr
-                .as_object()
-                .and_then(|object| object.get(key.to_owned()));
-            curr = match elem {
-                Some(child) => child,
-                None => return None,
-            };
-        }
-        Some(curr.clone())
-    }
 
     pub fn encode(msg: impl protobuf::Message, buf: &mut Vec<u8>) -> ProtobufResult<()> {
         let mut output = CodedOutputStream::new(buf);
@@ -298,49 +263,55 @@ mod message {
         output.flush()
     }
 
-    pub fn connect() -> proto::CastMessage {
+    pub fn connect() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.connection";
-        let payload = json!({"type": "CONNECT"});
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Connect {})?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn close() -> proto::CastMessage {
+    pub fn close() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.connection";
-        let payload = json!({"type": "CLOSE"});
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Close {})?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn ping() -> proto::CastMessage {
+    pub fn ping() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
-        let payload = json!({"type": "PING"});
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Ping {})?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn pong() -> proto::CastMessage {
+    pub fn pong() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.tp.heartbeat";
-        let payload = json!({"type": "PONG"});
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Pong {})?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn launch(app_id: &str) -> proto::CastMessage {
+    pub fn launch(app_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
-        let payload = json!({ "type": "LAUNCH", "appId": app_id });
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Launch {
+            request_id: 1,
+            app_id: app_id.to_owned()
+        })?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn stop(session_id: &str) -> proto::CastMessage {
+    pub fn stop(session_id: &str) -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
-        let payload = json!({ "type": "STOP", "sessionId": session_id });
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::Stop {
+            request_id: 1,
+            session_id: session_id.to_owned(),
+        })?;
+        Ok(message(namespace, payload))
     }
 
-    pub fn status() -> proto::CastMessage {
+    pub fn status() -> Result<proto::CastMessage, serde_json::Error> {
         let namespace = "urn:x-cast:com.google.cast.receiver";
-        let payload = json!({ "type": "GET_STATUS" });
-        message(namespace, payload)
+        let payload = serde_json::to_string(&Payload::GetStatus { request_id: 1 })?;
+        Ok(message(namespace, payload))
     }
 
-    fn message(namespace: &str, payload: Json) -> proto::CastMessage {
+    fn message(namespace: &str, payload: String) -> proto::CastMessage {
         let mut msg = proto::CastMessage::new();
         msg.set_payload_type(proto::CastMessage_PayloadType::STRING);
         msg.set_protocol_version(proto::CastMessage_ProtocolVersion::CASTV2_1_0);
