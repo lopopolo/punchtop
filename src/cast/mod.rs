@@ -227,13 +227,13 @@ pub fn connect(rt: &mut Runtime, addr: SocketAddr) -> Result<Chromecast, Error> 
 fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: UnboundedSender<Command>) {
     debug!("Message on receiver channel");
     match message {
-        ChannelMessage::Heartbeat(_) => debug!("Got heartbeat"),
+        ChannelMessage::Heartbeat(_) => {
+            debug!("Got heartbeat");
+            let _ = command.unbounded_send(Command::ReceiverStatus);
+        }
         ChannelMessage::Receiver(message) => match message {
-            receiver::Payload::ReceiverStatus { request_id, status } => {
-                debug!(
-                    "Got reciver status request_id={} status={:?}",
-                    request_id, status
-                );
+            receiver::Payload::ReceiverStatus { status, .. } => {
+                debug!("Got receiver stauts");
                 status
                     .applications
                     .iter()
@@ -374,7 +374,10 @@ impl Decoder for CastMessageCodec {
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Receiver)
                         .map(Some),
-                    channel => Err(io::Error::new(io::ErrorKind::Other, Error::UnknownChannel(channel.to_owned()))),
+                    channel => {
+                        warn!("Received message on unknown channel: {}", channel);
+                        Err(io::Error::new(io::ErrorKind::Other, Error::UnknownChannel(channel.to_owned())))
+                    }
                 }
             }
             None => Ok(None),
@@ -461,7 +464,6 @@ mod message {
     }
 
     pub fn receiver_status(request_id: i32) -> Result<proto::CastMessage, serde_json::Error> {
-        let namespace = "urn:x-cast:com.google.cast.receiver";
         let payload = serde_json::to_string(&receiver::Payload::GetStatus { request_id })?;
         Ok(message(receiver::NAMESPACE, payload))
     }

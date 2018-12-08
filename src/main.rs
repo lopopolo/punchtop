@@ -59,6 +59,7 @@ fn main() {
 
         match backend.connect(&mut rt) {
             Ok(_) => {
+                thread::sleep(Duration::new(60, 0));
                 playlist.next().map(|track| {
                     backend.play(track)
                 });
