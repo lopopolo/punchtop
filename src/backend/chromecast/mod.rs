@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use futures::prelude::*;
 use mdns::RecordKind;
 use tokio::runtime::Runtime;
 use url::Url;
@@ -13,7 +14,7 @@ use playlist::{Config, Track};
 
 mod media_server;
 mod parser;
-use cast::{self, Chromecast, Image, Media};
+use cast::{self, Chromecast, Image, Media, Status};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
@@ -94,6 +95,7 @@ impl<'a> CastTrack<'a> {
                 album: tags.album.to_option(),
                 url,
                 cover,
+                content_type: self.track.content_type(),
             }),
             _ => None,
         }
@@ -103,7 +105,7 @@ impl<'a> CastTrack<'a> {
 pub struct Device {
     game_config: Config,
     connect_config: CastAddr,
-    cast: Option<Chromecast>,
+    cast: Option<(Chromecast, String)>,
     media_server_bind_addr: Option<SocketAddr>,
 }
 
@@ -122,7 +124,7 @@ impl Player for Device {
                 self.media_server_bind_addr = Some(addr);
                 let cast = cast::connect(rt, self.connect_config.addr)
                     .map_err(|_| Error::BackendNotInitialized)?;
-                self.cast = Some(cast);
+                self.cast = Some((cast, "".to_owned()));
                 Ok(())
             }
             Err(_) => Err(Error::BackendNotInitialized),
@@ -130,15 +132,15 @@ impl Player for Device {
     }
 
     fn close(&self) -> backend::Result {
-        if let Some(ref cast) = self.cast {
-            cast.stop("");
+        if let Some((ref cast, _)) = self.cast {
+            cast.stop();
             cast.close();
         }
         Ok(())
     }
 
     fn play(&self, track: Track) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+        let (cast, session_id) = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self.media_server_bind_addr.ok_or(Error::BackendNotInitialized)?;
         let track = CastTrack {
             root: self.game_config.root(),
@@ -146,7 +148,7 @@ impl Player for Device {
             track: track,
         };
         let media = track.metadata().ok_or(Error::CannotLoadMedia(track.track))?;
-        cast.play(media);
+        cast.play(session_id.to_owned(), media);
         Ok(())
     }
 }

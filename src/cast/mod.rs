@@ -18,7 +18,7 @@ use tokio::runtime::Runtime;
 use tokio::timer::Interval;
 use url::Url;
 
-mod payload;
+pub mod payload;
 mod proto;
 
 use self::payload::*;
@@ -33,6 +33,7 @@ pub struct Media {
     pub album: Option<String>,
     pub url: Url,
     pub cover: Option<Image>,
+    pub content_type: String,
 }
 
 impl fmt::Display for Media {
@@ -94,7 +95,7 @@ pub enum Command {
     Connect,
     Heartbeat,
     Launch(String),
-    Load(Media),
+    Load(String, Media),
     MediaStatus(String),
     Pause,
     Play,
@@ -106,7 +107,7 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum Status {
-    Connected,
+    Connected(String),
     Media,
     LoadCancelled,
     LoadFailed,
@@ -124,15 +125,15 @@ impl Chromecast {
         let _ = self.chan.tx.unbounded_send(Command::ReceiverStatus);
     }
 
-    pub fn play(&self, media: Media) {
-        let _ = self.chan.tx.unbounded_send(Command::Load(media));
+    pub fn play(&self, session_id: String, media: Media) {
+        let _ = self.chan.tx.unbounded_send(Command::Load(session_id, media));
     }
 
-    pub fn stop(&self, app_id: &str) {
+    pub fn stop(&self) {
         let _ = self
             .chan
             .tx
-            .unbounded_send(Command::Stop(app_id.to_owned()));
+            .unbounded_send(Command::Stop(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned()));
     }
 
     pub fn close(&self) {
@@ -233,6 +234,13 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
                     "Got reciver status request_id={} status={:?}",
                     request_id, status
                 );
+                status
+                    .applications
+                    .iter()
+                    .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID)
+                    .map(|app| app.session_id.to_owned())
+                    .map(Status::Connected)
+                    .map(|status| tx.unbounded_send(status));
             }
             _ => {}
         }
@@ -276,7 +284,7 @@ impl Encoder for CastMessageCodec {
             Command::Connect => message::connect(),
             Command::Heartbeat => message::ping(),
             Command::Launch(ref app_id) => message::launch(counter, app_id),
-            Command::Load(_) => unimplemented!(),
+            Command::Load(session_id, media) => message::load(counter, &session_id, media),
             Command::MediaStatus(_) => unimplemented!(),
             Command::Pause => unimplemented!(),
             Command::Play => unimplemented!(),
@@ -379,6 +387,7 @@ mod message {
 
     use super::payload::*;
     use super::proto;
+    use super::Media;
 
     const DEFAULT_SENDER_ID: &str = "sender-0";
     const DEFAULT_DESTINATION_ID: &str = "receiver-0";
@@ -397,6 +406,28 @@ mod message {
     pub fn close() -> Result<proto::CastMessage, serde_json::Error> {
         let payload = serde_json::to_string(&connection::Payload::Close)?;
         Ok(message(connection::NAMESPACE, payload))
+    }
+
+    pub fn load(request_id: i32, session_id: &str, media: Media) -> Result<proto::CastMessage, serde_json::Error> {
+        let media = {
+            let config = media::Media {
+                content_id: media.url.to_string(),
+                stream_type: "NONE".to_string(),
+                content_type: media.content_type,
+                metadata: None,
+                duration: None,
+            };
+            config
+        };
+        let payload = serde_json::to_string(&media::Payload::Load {
+            request_id,
+            session_id: session_id.to_owned(),
+            media,
+            current_time: 0f32,
+            custom_data: media::CustomData::new(),
+            autoplay: true,
+        })?;
+        Ok(message(media::NAMESPACE, payload))
     }
 
     pub fn ping() -> Result<proto::CastMessage, serde_json::Error> {

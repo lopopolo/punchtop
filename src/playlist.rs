@@ -64,6 +64,10 @@ impl Track {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn content_type(&self) -> String {
+        tree_magic::from_filepath(self.path())
+    }
 }
 
 #[derive(Debug)]
