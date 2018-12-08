@@ -1,6 +1,8 @@
 use rodio;
 use rust_cast;
 
+use tokio::runtime::Runtime;
+
 use playlist::{Config, Track};
 
 pub mod chromecast;
@@ -67,7 +69,7 @@ pub trait Player {
     fn kind(&self) -> PlayerKind;
 
     /// Initialize the player to make it active.
-    fn connect(&mut self) -> Result;
+    fn connect(&mut self, rt: &mut Runtime) -> Result;
 
     /// Close a player to make it inactive.
     fn close(&self) -> Result;

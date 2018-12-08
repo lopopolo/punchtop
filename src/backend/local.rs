@@ -6,6 +6,7 @@ use std::os::raw::c_char;
 use hostname::get_hostname;
 use objc::runtime::Object;
 use rodio::{self, Decoder, Sink, Source};
+use tokio::runtime::Runtime;
 
 use backend::{self, Error, Player, PlayerKind};
 use playlist::{Config, Track};
@@ -69,7 +70,7 @@ impl Player for Device {
         PlayerKind::Local
     }
 
-    fn connect(&mut self) -> backend::Result {
+    fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
         Ok(())
     }
 

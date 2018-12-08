@@ -33,10 +33,14 @@ extern crate tree_magic;
 extern crate url;
 extern crate walkdir;
 
-use backend::PlayerKind;
 use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
+
+use tokio::runtime::Runtime;
+use tokio::prelude::*;
+
+use backend::PlayerKind;
 
 mod backend;
 mod cast;
@@ -44,6 +48,7 @@ mod playlist;
 
 fn main() {
     env_logger::init();
+    let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
     let player = backend::players(config.clone())
@@ -52,9 +57,9 @@ fn main() {
     if let Some(mut backend) = player {
         let playlist = playlist::Playlist::from_directory(config);
 
-        match backend.connect() {
+        match backend.connect(&mut rt) {
             Ok(_) => {
-                thread::sleep(Duration::new(60, 0));
+                rt.shutdown_on_idle().wait().unwrap();
                 for track in playlist {
                     println!("{:?}", track);
                     if let Err(err) = backend.play(track) {

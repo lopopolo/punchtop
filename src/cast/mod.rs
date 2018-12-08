@@ -14,6 +14,7 @@ use futures::{Future, Stream};
 use native_tls::TlsConnector;
 use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
 use tokio::timer::Interval;
 use url::Url;
 
@@ -89,6 +90,7 @@ pub enum Command {
     Seek(f32),
     Status,
     Stop(String),
+    Volume(f32, bool),
 }
 
 #[derive(Debug)]
@@ -101,103 +103,105 @@ pub enum Status {
     InvalidRequest,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ReceiverVolume {
-    pub level: f64,
-    pub muted: bool,
-}
-
 #[derive(Debug)]
 pub struct Chromecast {
-    message_counter: Arc<AtomicUsize>,
-    write: u8,
     chan: Channel<Command, Status>,
 }
 
 impl Chromecast {
-    pub fn connect(addr: SocketAddr) -> Result<Channel<Command, Status>, Error> {
-        let socket = TcpStream::connect(&addr);
-        let cx = TlsConnector::builder()
-            .danger_accept_invalid_hostnames(true)
-            .danger_accept_invalid_certs(true)
-            .build()
-            .map(tokio_tls::TlsConnector::from)
-            .map_err(|_| Error::Connect)?;
-
-        let (command_tx, command_rx) = unbounded();
-        let (status_tx, status_rx) = unbounded();
-        let command = command_tx.clone();
-        let heartbeat = command_tx.clone();
-
-        let connect = socket
-            .and_then(move |socket| {
-                info!("Establishing TLS connection with Chromecast");
-                cx.connect(&format!("{}", addr.ip()), socket)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-            })
-            .map(move |socket| {
-                info!("Chomecast connect successful");
-                let (write, read) = Framed::new(socket, CastMessageCodec::new()).split();
-                let rx = read
-                    .for_each(move |message| {
-                        let status = status_tx.clone();
-                        let command = command.clone();
-                        Ok(Chromecast::read(message, status, command))
-                    })
-                    .map(|_| ())
-                    .map_err(|err| {
-                        warn!("Error running future Chromecast TLS payload reader: {:?}", err)
-                    });
-                let tx = command_rx
-                    .forward(write.sink_map_err(|_| ()))
-                    .map(|_| ())
-                    .map_err(|err| {
-                        warn!("Error running future Chromecast receiver channel: {:?}", err)
-                    });
-                let heartbeat = Interval::new_interval(Duration::new(5, 0))
-                    .map(|_| Command::Heartbeat)
-                    .map_err(|_| ())
-                    .forward(heartbeat.sink_map_err(|_| ()))
-                    .map(|_| ())
-                    .map_err(|err| {
-                        warn!("Error running future Chromecast heartbeat channel: {:?}", err)
-                    });
-                tokio::spawn(rx);
-                tokio::spawn(tx);
-                tokio::spawn(heartbeat);
-            })
-            .map(|_| ())
-            .map_err(|err| {
-                warn!("Error running future Chromecast connect: {:?}", err)
-            });
-
-        let _ = command_tx.unbounded_send(Command::Connect)
-            .and_then(|_| command_tx.unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned())))
-            .map(|_| Channel {
-                tx: command_tx,
-                rx: status_rx,
-            })
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err));
-        tokio::run(connect);
-
-        Err(Error::Connect)
+    pub fn stop(&self, app_id: &str) {
+        let _ = self.chan.tx.unbounded_send(Command::Stop(app_id.to_owned()));
     }
 
-    fn read(
-        message: Payload,
-        tx: UnboundedSender<Status>,
-        command: UnboundedSender<Command>,
+    pub fn close(&self) {
+        let _ = self.chan.tx.unbounded_send(Command::Close);
+    }
+}
+
+pub fn connect(rt: &mut Runtime, addr: SocketAddr) -> Result<Chromecast, Error> {
+    let socket = TcpStream::connect(&addr);
+    let cx = TlsConnector::builder()
+        .danger_accept_invalid_hostnames(true)
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map(tokio_tls::TlsConnector::from)
+        .map_err(|_| Error::Connect)?;
+
+    let (command_tx, command_rx) = unbounded();
+    let (status_tx, status_rx) = unbounded();
+    let command = command_tx.clone();
+    let heartbeat = command_tx.clone();
+
+    let cast = Chromecast {
+        chan: Channel {
+            tx: command_tx,
+            rx: status_rx,
+        },
+    };
+
+    let connect = socket
+        .and_then(move |socket| {
+            info!("Establishing TLS connection with Chromecast");
+            cx.connect(&format!("{}", addr.ip()), socket)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        })
+    .map(move |socket| {
+        info!("Chomecast connect successful");
+        let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
+        let rx = source
+            .for_each(move |message| {
+                let status = status_tx.clone();
+                let command = command.clone();
+                Ok(read(message, status, command))
+            })
+        .map(|_| ())
+            .map_err(|err| {
+                warn!("Error running future Chromecast TLS payload reader: {:?}", err)
+            });
+        let tx = command_rx
+            .forward(sink.sink_map_err(|_| ()))
+            .map(|_| ())
+            .map_err(|err| {
+                warn!("Error running future Chromecast receiver channel: {:?}", err)
+            });
+        let heartbeat = Interval::new_interval(Duration::new(5, 0))
+            .map(|_| Command::Heartbeat)
+            .map_err(|_| ())
+            .forward(heartbeat.sink_map_err(|_| ()))
+            .map(|_| ())
+            .map_err(|err| {
+                warn!("Error running future Chromecast heartbeat channel: {:?}", err)
+            });
+        tokio::spawn(rx);
+        tokio::spawn(tx);
+        tokio::spawn(heartbeat);
+    })
+    .map(|_| ())
+        .map_err(|err| {
+            warn!("Error running future Chromecast connect: {:?}", err)
+        });
+
+    rt.spawn(connect);
+    cast.chan.tx.unbounded_send(Command::Connect)
+        .and_then(|_| cast.chan.tx.unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned())))
+        .map(|_| cast)
+        .map_err(|_| Error::Connect)
+}
+
+fn read(
+    message: Payload,
+    tx: UnboundedSender<Status>,
+    command: UnboundedSender<Command>,
     ) {
-        debug!("Message on receiver channel");
-        match message {
-            Payload::Pong => {
-                debug!("Got PONG");
-            }
-            Payload::ReceiverStatus { request_id, status } => {
-                debug!("Got reciver status request_id={} status={:?}", request_id, status);
-            }
-            payload => warn!("Got unknown payload: {:?}", payload),
+    debug!("Message on receiver channel");
+    match message {
+        Payload::Pong => {
+            debug!("Got PONG");
         }
+        Payload::ReceiverStatus { request_id, status } => {
+            debug!("Got reciver status request_id={} status={:?}", request_id, status);
+        }
+        payload => warn!("Got unknown payload: {:?}", payload),
     }
 }
 
@@ -240,6 +244,7 @@ impl Encoder for CastMessageCodec {
             Command::Seek(_) => unimplemented!(),
             Command::Status => message::status(counter),
             Command::Stop(ref session_id) => message::stop(counter, session_id),
+            Command::Volume(_, _) => unimplemented!(),
         };
 
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
@@ -309,7 +314,7 @@ impl Decoder for CastMessageCodec {
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 serde_json::from_str::<Payload>(message.get_payload_utf8())
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                .map(Some)
+                    .map(Some)
             }
             None => return Ok(None),
         }

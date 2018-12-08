@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use mdns::RecordKind;
+use tokio::runtime::Runtime;
 use url::Url;
 
 use backend::{self, Error, Player, PlayerKind};
@@ -12,7 +13,7 @@ use playlist::{Config, Track};
 
 mod media_server;
 mod parser;
-use cast::{Channel, Chromecast, Command, Image, Media, Status};
+use cast::{self, Chromecast, Image, Media};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
@@ -102,7 +103,7 @@ impl<'a> CastTrack<'a> {
 pub struct Device {
     game_config: Config,
     connect_config: CastAddr,
-    chan: Option<Channel<Command, Status>>,
+    cast: Option<Chromecast>,
     media_server_bind_addr: Option<SocketAddr>,
 }
 
@@ -115,26 +116,23 @@ impl Player for Device {
         PlayerKind::Chromecast
     }
 
-    fn connect(&mut self) -> backend::Result {
+    fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
         match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
-                self.chan = Chromecast::connect(self.connect_config.addr)
-                    .map_err(|_| Error::BackendNotInitialized)
-                    .ok();
-                match self.chan {
-                    Some(_) => Ok(()),
-                    None => Err(Error::BackendNotInitialized),
-                }
+                let cast = cast::connect(rt, self.connect_config.addr)
+                    .map_err(|_| Error::BackendNotInitialized)?;
+                self.cast = Some(cast);
+                Ok(())
             }
             Err(_) => Err(Error::BackendNotInitialized),
         }
     }
 
     fn close(&self) -> backend::Result {
-        if let Some(ref chan) = self.chan {
-            let _ = chan.tx.unbounded_send(Command::Stop("".to_owned()));
-            let _ = chan.tx.unbounded_send(Command::Close);
+        if let Some(ref cast) = self.cast {
+            cast.stop("");
+            cast.close();
         }
         Ok(())
     }
@@ -159,7 +157,7 @@ impl Iterator for Devices {
         self.connect.next().map(|connect_config| Device {
             connect_config,
             game_config: self.game.clone(),
-            chan: None,
+            cast: None,
             media_server_bind_addr: None,
         })
     }
