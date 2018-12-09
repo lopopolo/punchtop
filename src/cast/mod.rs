@@ -40,10 +40,14 @@ pub struct Chromecast {
 
 impl Chromecast {
     pub fn launch_app(&self) {
-        let launch = Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned());
+        let launch = Command::Launch {
+            app_id: DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned()
+        };
         let _ = self
             .command
-            .unbounded_send(Command::Connect)
+            .unbounded_send(Command::Connect {
+                destination: message::DEFAULT_DESTINATION_ID.to_owned(),
+            })
             .and_then(|_| self.command.unbounded_send(launch));
     }
 
@@ -147,7 +151,6 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         ChannelMessage::Heartbeat(_) => {
             debug!("Got heartbeat");
             let _ = command.unbounded_send(Command::ReceiverStatus);
-            // let _ = command.unbounded_send(Command::MediaStatus);
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
@@ -159,7 +162,13 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
                     .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID)
                     .map(|app| (app.session_id.to_owned(), app.transport_id.to_owned()));
                 if let Some((session, transport)) = channel {
-                    let _ = tx.unbounded_send(Status::Connected { session, transport });
+                    let _ = tx.unbounded_send(Status::Connected {
+                        session,
+                        transport: transport.to_owned(),
+                    });
+                    let _ = command.unbounded_send(Command::Connect {
+                        destination: transport,
+                    });
                 }
             }
             payload => warn!("Got unknown payload on receiver channel: {:?}", payload),

@@ -25,7 +25,7 @@ pub fn load(request_id: i32, session_id: &str, transport_id: &str, media: Media)
         custom_data: media::CustomData::new(),
         autoplay: true,
     })?;
-    Ok(message(NAMESPACE, transport_id, payload))
+    Ok(message(transport_id, payload))
 }
 
 pub fn play(request_id: i32, transport_id: &str, media_session_id: i32) -> Result<CastMessage, Error> {
@@ -34,7 +34,7 @@ pub fn play(request_id: i32, transport_id: &str, media_session_id: i32) -> Resul
         media_session_id: media_session_id,
         custom_data: media::CustomData::new(),
     })?;
-    Ok(message(NAMESPACE, transport_id, payload))
+    Ok(message(transport_id, payload))
 }
 
 pub fn status(request_id: i32, transport_id: &str) -> Result<CastMessage, Error> {
@@ -42,15 +42,14 @@ pub fn status(request_id: i32, transport_id: &str) -> Result<CastMessage, Error>
         request_id,
         media_session_id: None,
     })?;
-    let msg = message(NAMESPACE, transport_id, payload); // TODO: don't break this out
-    Ok(msg)
+    Ok(message(transport_id, payload))
 }
 
-fn message(namespace: &str, transport_id: &str, payload: String) -> CastMessage {
+fn message(transport_id: &str, payload: String) -> CastMessage {
     let mut msg = CastMessage::new();
     msg.set_payload_type(CastMessage_PayloadType::STRING);
     msg.set_protocol_version(CastMessage_ProtocolVersion::CASTV2_1_0);
-    msg.set_namespace(namespace.to_owned());
+    msg.set_namespace(NAMESPACE.to_owned());
     msg.set_source_id(super::DEFAULT_SENDER_ID.to_owned());
     msg.set_destination_id(transport_id.to_owned());
     msg.set_payload_utf8(payload);

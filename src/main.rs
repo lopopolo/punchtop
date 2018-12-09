@@ -103,7 +103,7 @@ fn main() {
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
     let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "Kitchen Home");
+        .find(|p| p.name() == "TV");
     if let Some(mut backend) = player {
         let status = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(config);

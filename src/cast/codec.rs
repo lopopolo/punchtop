@@ -53,10 +53,10 @@ impl Encoder for CastMessageCodec {
             encode_counter, item
         );
         let message = match item {
-            Command::Close => message::connection::close(),
-            Command::Connect => message::connection::connect(),
+            Command::Close { destination } => message::connection::close(&destination),
+            Command::Connect { destination } => message::connection::connect(&destination),
             Command::Heartbeat => message::heartbeat::ping(),
-            Command::Launch(ref app_id) => message::receiver::launch(req_id, app_id),
+            Command::Launch { app_id } => message::receiver::launch(req_id, &app_id),
             Command::Load { session, transport, media } =>
                 message::media::load(req_id, &session, &transport, media),
             Command::MediaStatus { transport } => message::media::status(req_id, &transport),
@@ -65,8 +65,9 @@ impl Encoder for CastMessageCodec {
                 message::media::play(req_id, &transport, media_session),
             Command::ReceiverStatus => message::receiver::status(req_id),
             Command::Seek(_) => unimplemented!(),
-            Command::Stop(ref session_id) => message::receiver::stop(req_id, session_id),
-            Command::Volume(_, _) => unimplemented!(),
+            Command::Stop { transport, media_session } => message::receiver::stop(req_id, &transport, &media_session),
+            Command::VolumeLevel(_) => unimplemented!(),
+            Command::VolumeMute(_) => unimplemented!(),
         };
 
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;

@@ -54,18 +54,19 @@ impl fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum Command {
-    Close,
-    Connect,
+    Close { destination: String },
+    Connect { destination: String },
     Heartbeat,
-    Launch(String),
+    Launch { app_id: String },
     Load { session: String, transport: String, media: Media },
     MediaStatus { transport: String },
     Pause,
     Play { media_session: i32, transport: String },
     ReceiverStatus,
     Seek(f32),
-    Stop(String),
-    Volume(f32, bool),
+    Stop { media_session: String, transport: String },
+    VolumeLevel(f32),
+    VolumeMute(bool),
 }
 
 #[derive(Debug)]
