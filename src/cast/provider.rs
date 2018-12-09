@@ -45,7 +45,9 @@ impl error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::UnknownChannel(ref channel) => write!(f, "Message received on unknown channel {:?}", channel)
+            Error::UnknownChannel(ref channel) => {
+                write!(f, "Message received on unknown channel {:?}", channel)
+            }
         }
     }
 }

@@ -53,7 +53,7 @@ pub mod media {
             custom_data: CustomData,
         },
         #[serde(rename_all = "camelCase")]
-        Stop{
+        Stop {
             request_id: i32,
             media_session_id: i32,
             custom_data: CustomData,
@@ -73,17 +73,11 @@ pub mod media {
             status: Vec<Status>,
         },
         #[serde(rename_all = "camelCase")]
-        LoadCancelled {
-            request_id: i32,
-        },
+        LoadCancelled { request_id: i32 },
         #[serde(rename_all = "camelCase")]
-        LoadFailed {
-            request_id: i32,
-        },
+        LoadFailed { request_id: i32 },
         #[serde(rename_all = "camelCase")]
-        InvalidPlayerState {
-            request_id: i32,
-        },
+        InvalidPlayerState { request_id: i32 },
         #[serde(rename_all = "camelCase")]
         InvalidRequest {
             request_id: i32,

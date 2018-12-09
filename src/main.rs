@@ -46,6 +46,8 @@ mod backend;
 mod cast;
 mod playlist;
 
+use cast::Status;
+
 struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
@@ -53,7 +55,10 @@ struct Game {
 
 impl Game {
     fn session(&self) -> Option<String> {
-        self.client.cast.as_ref().and_then(|cast| cast.session_id.to_owned())
+        self.client
+            .cast
+            .as_ref()
+            .and_then(|cast| cast.session_id.to_owned())
     }
 
     fn set_session(&mut self, session: String) {
@@ -63,7 +68,10 @@ impl Game {
     }
 
     fn media_session(&self) -> Option<i32> {
-        self.client.cast.as_ref().and_then(|cast| cast.media_session_id)
+        self.client
+            .cast
+            .as_ref()
+            .and_then(|cast| cast.media_session_id)
     }
 
     fn set_media_session(&mut self, session: i32) {
@@ -98,34 +106,37 @@ fn main() {
     if let Some(mut backend) = player {
         let mut client = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(config);
-        let mut game = Game { playlist, client: backend };
-        let play_loop = client.chan.rx
+        let mut game = Game {
+            playlist,
+            client: backend,
+        };
+        let play_loop = client
+            .chan
+            .rx
             .for_each(move |message| {
                 info!("message: {:?}", message);
                 match message {
-                    cast::Status::Connected(session_id) => match game.session() {
+                    Status::Connected(session_id) => match game.session() {
                         Some(_) => {}
                         None => {
                             game.set_session(session_id);
                             game.load_next();
                         }
-                    }
-                    cast::Status::MediaConnected(media_session_id) => match game.media_session() {
+                    },
+                    Status::MediaConnected(media_session_id) => match game.media_session() {
                         Some(_) => {}
                         None => {
                             game.set_media_session(media_session_id);
                             game.play();
                         }
-                    }
+                    },
                     _ => {}
                 };
                 Ok(())
             })
             .into_future();
-            rt.spawn(play_loop);
-            thread::sleep(Duration::new(30, 0));
-            //backend.load(track);
-        //}
+        rt.spawn(play_loop);
+        thread::sleep(Duration::new(30, 0));
     }
     rt.shutdown_on_idle().wait().unwrap();
 }

@@ -118,7 +118,10 @@ impl Device {
         PlayerKind::Chromecast
     }
 
-    pub fn connect(&mut self, rt: &mut tokio::runtime::Runtime) -> Result<cast::Chromecast, backend::Error> {
+    pub fn connect(
+        &mut self,
+        rt: &mut tokio::runtime::Runtime,
+    ) -> Result<cast::Chromecast, backend::Error> {
         match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
@@ -140,13 +143,17 @@ impl Device {
 
     pub fn load(&self, track: Track) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        let addr = self.media_server_bind_addr.ok_or(Error::BackendNotInitialized)?;
+        let addr = self
+            .media_server_bind_addr
+            .ok_or(Error::BackendNotInitialized)?;
         let track = CastTrack {
             root: self.game_config.root(),
             server: addr,
             track: track,
         };
-        let media = track.metadata().ok_or(Error::CannotLoadMedia(track.track))?;
+        let media = track
+            .metadata()
+            .ok_or(Error::CannotLoadMedia(track.track))?;
         cast.load(media);
         Ok(())
     }

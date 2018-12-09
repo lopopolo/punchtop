@@ -7,17 +7,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::prelude::*;
-use futures::{future, Future};
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::{future, Future};
 use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
 use tokio::timer::Interval;
 use tokio_tls::{TlsConnector, TlsStream};
 
 mod message;
-mod provider;
 mod payload;
 mod proto;
+mod provider;
 
 use self::message::namespace::*;
 use self::payload::*;
@@ -54,13 +54,19 @@ impl Chromecast {
 
     pub fn launch_app(&self) {
         let launch = Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned());
-        let _ = self.chan.tx.unbounded_send(Command::Connect)
+        let _ = self
+            .chan
+            .tx
+            .unbounded_send(Command::Connect)
             .and_then(|_| self.chan.tx.unbounded_send(launch));
     }
 
     pub fn load(&self, media: Media) {
         if let Some(ref session_id) = self.session_id {
-            let _ = self.chan.tx.unbounded_send(Command::Load(session_id.to_owned(), media));
+            let _ = self
+                .chan
+                .tx
+                .unbounded_send(Command::Load(session_id.to_owned(), media));
         }
     }
 
@@ -83,7 +89,7 @@ impl Chromecast {
 }
 
 /// Asynchronously establish a TLS connection.
-fn tls_connect(addr: SocketAddr) -> impl Future<Item=TlsStream<TcpStream>, Error=io::Error> {
+fn tls_connect(addr: SocketAddr) -> impl Future<Item = TlsStream<TcpStream>, Error = io::Error> {
     let connector = native_tls::TlsConnector::builder()
         .danger_accept_invalid_hostnames(true)
         .danger_accept_invalid_certs(true)
@@ -99,7 +105,8 @@ fn tls_connect(addr: SocketAddr) -> impl Future<Item=TlsStream<TcpStream>, Error
         .and_then(move |socket| {
             info!("Establishing TLS connection at {:?}", addr);
             let domain = format!("{}", addr.ip());
-            connector.connect(&domain, socket)
+            connector
+                .connect(&domain, socket)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         });
     future::Either::B(connect)
@@ -117,44 +124,39 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> Chromecast
         session_id: None,
         media_session_id: None,
     };
-    let init = tls_connect(addr)
-        .map(move |socket| {
-            info!("TLS connection established");
-            let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-            tokio::spawn(reader(source, status_tx, command_tx.clone()));
-            tokio::spawn(writer(sink, command_rx));
-            tokio::spawn(heartbeat(command_tx.clone()));
-        });
+    let init = tls_connect(addr).map(move |socket| {
+        info!("TLS connection established");
+        let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
+        tokio::spawn(reader(source, status_tx, command_tx.clone()));
+        tokio::spawn(writer(sink, command_rx));
+        tokio::spawn(heartbeat(command_tx.clone()));
+    });
     rt.spawn(init.map_err(|_| ()));
     cast
 }
 
 fn reader(
-    source: impl Stream<Item=ChannelMessage, Error=io::Error>,
+    source: impl Stream<Item = ChannelMessage, Error = io::Error>,
     status: UnboundedSender<Status>,
-    command: UnboundedSender<Command>
-) -> impl Future<Item=(), Error=()> {
+    command: UnboundedSender<Command>,
+) -> impl Future<Item = (), Error = ()> {
     source
-        .for_each(move |message| {
-            Ok(read(message, status.clone(), command.clone()))
-        })
+        .for_each(move |message| Ok(read(message, status.clone(), command.clone())))
         .map(|_| ())
         .map_err(|err| warn!("Error on send: {:?}", err))
 }
 
 fn writer(
-    sink: impl Sink<SinkItem=Command, SinkError=io::Error>,
-    command: UnboundedReceiver<Command>
-) -> impl Future<Item=(), Error=()> {
+    sink: impl Sink<SinkItem = Command, SinkError = io::Error>,
+    command: UnboundedReceiver<Command>,
+) -> impl Future<Item = (), Error = ()> {
     command
         .forward(sink.sink_map_err(|_| ()))
         .map(|_| ())
         .map_err(|err| warn!("Error on recv: {:?}", err))
 }
 
-fn heartbeat(
-    heartbeat: UnboundedSender<Command>
-) -> impl Future<Item=(), Error=()> {
+fn heartbeat(heartbeat: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::new(5, 0))
         .map(|_| Command::Heartbeat)
         .map_err(|_| ())
@@ -183,19 +185,17 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
                 }
             }
             _ => {}
-        }
+        },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
                 debug!("Got media status");
-                let media_session_id = status
-                    .first()
-                    .map(|status| status.media_session_id);
+                let media_session_id = status.first().map(|status| status.media_session_id);
                 if let Some(media_session_id) = media_session_id {
                     let _ = tx.unbounded_send(Status::MediaConnected(media_session_id));
                 }
             }
             _ => {}
-        }
+        },
         payload => warn!("Got unknown payload: {:?}", payload),
     }
 }
@@ -310,25 +310,34 @@ impl Decoder for CastMessageCodec {
                 let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 match message.get_namespace() {
-                    CONNECTION => serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                        .map(ChannelMessage::Connection)
-                        .map(Some),
-                    HEARTBEAT => serde_json::from_str::<heartbeat::Payload>(message.get_payload_utf8())
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                        .map(ChannelMessage::Heartbeat)
-                        .map(Some),
+                    CONNECTION => {
+                        serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
+                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(ChannelMessage::Connection)
+                            .map(Some)
+                    }
+                    HEARTBEAT => {
+                        serde_json::from_str::<heartbeat::Payload>(message.get_payload_utf8())
+                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(ChannelMessage::Heartbeat)
+                            .map(Some)
+                    }
                     MEDIA => serde_json::from_str::<media::Payload>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Media)
                         .map(Some),
-                    RECEIVER => serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                        .map(ChannelMessage::Receiver)
-                        .map(Some),
+                    RECEIVER => {
+                        serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
+                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(ChannelMessage::Receiver)
+                            .map(Some)
+                    }
                     channel => {
                         warn!("Received message on unknown channel: {}", channel);
-                        Err(io::Error::new(io::ErrorKind::Other, Error::UnknownChannel(channel.to_owned())))
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            Error::UnknownChannel(channel.to_owned()),
+                        ))
                     }
                 }
             }
