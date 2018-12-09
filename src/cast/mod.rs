@@ -18,7 +18,7 @@ use tokio_tls::{TlsConnector, TlsStream};
 use url::Url;
 
 mod message;
-pub mod payload;
+mod payload;
 mod proto;
 
 use self::payload::*;
