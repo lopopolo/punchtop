@@ -49,15 +49,14 @@ impl Chromecast {
 
     pub fn load(&self, media: Media) {
         if let Some(ref session_id) = self.session {
-            let status = Command::MediaStatus(session_id.to_owned());
             let _ = self
                 .command
-                .unbounded_send(Command::Load(session_id.to_owned(), media))
-                .and_then(|_| self.command.unbounded_send(status));
+                .unbounded_send(Command::Load(session_id.to_owned(), media));
         }
     }
 
     pub fn play(&self) {
+        debug!("in play: {:?}", self.media_session);
         if let Some(media_session_id) = self.media_session {
             let _ = self.command.unbounded_send(Command::Play(media_session_id));
         }
@@ -145,6 +144,7 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         ChannelMessage::Heartbeat(_) => {
             debug!("Got heartbeat");
             let _ = command.unbounded_send(Command::ReceiverStatus);
+            let _ = command.unbounded_send(Command::MediaStatus);
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
@@ -158,7 +158,7 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
                     let _ = tx.unbounded_send(Status::Connected(session_id));
                 }
             }
-            _ => {}
+            payload => warn!("Got unknown payload on receiver channel: {:?}", payload),
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
@@ -168,7 +168,7 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
                     let _ = tx.unbounded_send(Status::MediaConnected(media_session_id));
                 }
             }
-            _ => {}
+            payload => warn!("Got unknown payload on media channel: {:?}", payload),
         },
         payload => warn!("Got unknown payload: {:?}", payload),
     }

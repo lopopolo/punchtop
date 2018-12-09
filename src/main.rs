@@ -58,11 +58,11 @@ impl Game {
         self.client
             .cast
             .as_ref()
-            .and_then(|(cast, _)| cast.session.to_owned())
+            .and_then(|cast| cast.session.to_owned())
     }
 
     fn set_session(&mut self, session: String) {
-        if let Some((ref mut cast, _)) = self.client.cast {
+        if let Some(ref mut cast) = self.client.cast {
             cast.session = Some(session);
         }
     }
@@ -71,11 +71,11 @@ impl Game {
         self.client
             .cast
             .as_ref()
-            .and_then(|(cast, _)| cast.media_session)
+            .and_then(|cast| cast.media_session)
     }
 
     fn set_media_session(&mut self, session: i32) {
-        if let Some((ref mut cast, _)) = self.client.cast {
+        if let Some(ref mut cast) = self.client.cast {
             cast.media_session = Some(session);
         }
     }
@@ -104,7 +104,7 @@ fn main() {
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
-        let (mut client, status) = backend.connect(&mut rt).unwrap();
+        let status = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(config);
         let mut game = Game {
             playlist,
@@ -113,10 +113,12 @@ fn main() {
         let play_loop = status
             .for_each(move |message| {
                 info!("message: {:?}", message);
+                info!("cast: {:?}", game.client.cast);
                 match message {
                     Status::Connected(session_id) => match game.session() {
                         Some(_) => {}
                         None => {
+                            info!("set session id: {}", session_id);
                             game.set_session(session_id);
                             game.load_next();
                         }
@@ -128,7 +130,7 @@ fn main() {
                             game.play();
                         }
                     },
-                    _ => {}
+                    message => warn!("Got unknown message: {:?}", message),
                 };
                 Ok(())
             })

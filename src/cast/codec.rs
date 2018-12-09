@@ -55,7 +55,7 @@ impl Encoder for CastMessageCodec {
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch(ref app_id) => message::receiver::launch(counter, app_id),
             Command::Load(session_id, media) => message::media::load(counter, &session_id, media),
-            Command::MediaStatus(_) => unimplemented!(),
+            Command::MediaStatus => message::media::status(counter),
             Command::Pause => unimplemented!(),
             Command::Play(media_session_id) => message::media::play(counter, media_session_id),
             Command::ReceiverStatus => message::receiver::status(counter),

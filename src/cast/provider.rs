@@ -59,7 +59,7 @@ pub enum Command {
     Heartbeat,
     Launch(String),
     Load(String, Media),
-    MediaStatus(String),
+    MediaStatus,
     Pause,
     Play(i32),
     ReceiverStatus,
