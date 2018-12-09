@@ -4,9 +4,8 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use futures::prelude::*;
+use futures::sync::mpsc::UnboundedReceiver;
 use mdns::RecordKind;
-use tokio::runtime::Runtime;
 use url::Url;
 
 use backend::{self, Error, Player, PlayerKind};
@@ -105,7 +104,7 @@ impl<'a> CastTrack<'a> {
 pub struct Device {
     game_config: Config,
     connect_config: CastAddr,
-    pub cast: Option<Chromecast>, // TODO: don't expose this
+    pub cast: Option<(Chromecast, UnboundedReceiver<Status>)>, // TODO: don't expose this
     media_server_bind_addr: Option<SocketAddr>,
 }
 
@@ -121,13 +120,13 @@ impl Device {
     pub fn connect(
         &mut self,
         rt: &mut tokio::runtime::Runtime,
-    ) -> Result<cast::Chromecast, backend::Error> {
+    ) -> Result<(cast::Chromecast, UnboundedReceiver<cast::Status>), backend::Error> {
         match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
-                let cast = cast::connect(self.connect_config.addr, rt);
+                let (cast, status) = cast::connect(self.connect_config.addr, rt);
                 cast.launch_app();
-                Ok(cast)
+                Ok((cast, status))
             }
             Err(_) => Err(Error::BackendNotInitialized),
         }
@@ -135,14 +134,14 @@ impl Device {
 
     pub fn close(&self) -> backend::Result {
         if let Some(ref cast) = self.cast {
-            cast.stop();
-            cast.close();
+            // cast.stop();
+            // cast.close();
         }
         Ok(())
     }
 
     pub fn load(&self, track: Track) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+        let (cast, _) = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self
             .media_server_bind_addr
             .ok_or(Error::BackendNotInitialized)?;
@@ -159,7 +158,7 @@ impl Device {
     }
 
     pub fn play(&self) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+        let (cast, _) = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         cast.play();
         Ok(())
     }

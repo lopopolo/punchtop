@@ -58,12 +58,12 @@ impl Game {
         self.client
             .cast
             .as_ref()
-            .and_then(|cast| cast.session_id.to_owned())
+            .and_then(|(cast, _)| cast.session.to_owned())
     }
 
     fn set_session(&mut self, session: String) {
-        if let Some(ref mut cast) = self.client.cast {
-            cast.session_id = Some(session);
+        if let Some((ref mut cast, _)) = self.client.cast {
+            cast.session = Some(session);
         }
     }
 
@@ -71,12 +71,12 @@ impl Game {
         self.client
             .cast
             .as_ref()
-            .and_then(|cast| cast.media_session_id)
+            .and_then(|(cast, _)| cast.media_session)
     }
 
     fn set_media_session(&mut self, session: i32) {
-        if let Some(ref mut cast) = self.client.cast {
-            cast.media_session_id = Some(session);
+        if let Some((ref mut cast, _)) = self.client.cast {
+            cast.media_session = Some(session);
         }
     }
 
@@ -104,15 +104,13 @@ fn main() {
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
-        let mut client = backend.connect(&mut rt).unwrap();
+        let (mut client, status) = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(config);
         let mut game = Game {
             playlist,
             client: backend,
         };
-        let play_loop = client
-            .chan
-            .rx
+        let play_loop = status
             .for_each(move |message| {
                 info!("message: {:?}", message);
                 match message {

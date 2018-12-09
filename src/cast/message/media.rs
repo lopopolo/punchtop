@@ -29,10 +29,18 @@ pub fn load(request_id: i32, session_id: &str, media: Media) -> Result<CastMessa
 }
 
 pub fn play(request_id: i32, media_session_id: i32) -> Result<CastMessage, Error> {
-    let payload = serde_json::to_string(&media::Payload::Play {
+    let payload = to_string(&media::Payload::Play {
         request_id,
         media_session_id: media_session_id,
         custom_data: media::CustomData::new(),
+    })?;
+    Ok(super::message(NAMESPACE, payload))
+}
+
+pub fn status(request_id: i32) -> Result<CastMessage, Error> {
+    let payload = to_string(&media::Payload::GetStatus {
+        request_id,
+        media_session_id: None,
     })?;
     Ok(super::message(NAMESPACE, payload))
 }
