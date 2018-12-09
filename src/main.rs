@@ -51,6 +51,7 @@ use cast::Status;
 struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
+    transport: String,
 }
 
 impl Game {
@@ -83,7 +84,7 @@ impl Game {
     fn load_next(&mut self) -> Option<()> {
         match self.playlist.next() {
             Some(track) => {
-                let _ = self.client.load(track);
+                let _ = self.client.load(self.transport.to_owned(), track);
                 Some(())
             }
             None => None,
@@ -91,7 +92,7 @@ impl Game {
     }
 
     fn play(&self) {
-        let _ = self.client.play();
+        let _ = self.client.play(self.transport.to_owned());
     }
 }
 
@@ -109,17 +110,18 @@ fn main() {
         let mut game = Game {
             playlist,
             client: backend,
+            transport: "".to_owned(),
         };
         let play_loop = status
             .for_each(move |message| {
                 info!("message: {:?}", message);
-                info!("cast: {:?}", game.client.cast);
                 match message {
-                    Status::Connected(session_id) => match game.session() {
+                    Status::Connected { session, transport } => match game.session() {
                         Some(_) => {}
                         None => {
-                            info!("set session id: {}", session_id);
-                            game.set_session(session_id);
+                            info!("set session/transport id: ({}, {})", session, transport);
+                            game.set_session(session);
+                            game.transport = transport;
                             game.load_next();
                         }
                     },

@@ -58,10 +58,10 @@ pub enum Command {
     Connect,
     Heartbeat,
     Launch(String),
-    Load(String, Media),
-    MediaStatus,
+    Load { session: String, transport: String, media: Media },
+    MediaStatus { transport: String },
     Pause,
-    Play(i32),
+    Play { media_session: i32, transport: String },
     ReceiverStatus,
     Seek(f32),
     Stop(String),
@@ -70,7 +70,7 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum Status {
-    Connected(String),
+    Connected { session: String, transport: String },
     Media,
     MediaConnected(i32),
     LoadCancelled,

@@ -47,18 +47,21 @@ impl Chromecast {
             .and_then(|_| self.command.unbounded_send(launch));
     }
 
-    pub fn load(&self, media: Media) {
-        if let Some(ref session_id) = self.session {
+    pub fn load(&self, transport: String, media: Media) {
+        if let Some(ref session) = self.session {
             let _ = self
                 .command
-                .unbounded_send(Command::Load(session_id.to_owned(), media));
+                .unbounded_send(Command::Load {
+                    session: session.to_owned(),
+                    transport,
+                    media
+                });
         }
     }
 
-    pub fn play(&self) {
-        debug!("in play: {:?}", self.media_session);
-        if let Some(media_session_id) = self.media_session {
-            let _ = self.command.unbounded_send(Command::Play(media_session_id));
+    pub fn play(&self, transport: String) {
+        if let Some(media_session) = self.media_session {
+            let _ = self.command.unbounded_send(Command::Play { media_session, transport });
         }
     }
 }
@@ -144,18 +147,19 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         ChannelMessage::Heartbeat(_) => {
             debug!("Got heartbeat");
             let _ = command.unbounded_send(Command::ReceiverStatus);
-            let _ = command.unbounded_send(Command::MediaStatus);
+            // let _ = command.unbounded_send(Command::MediaStatus);
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
                 debug!("Got receiver status: {:?}", status);
-                let session_id = status
+                let channel = status
                     .applications
                     .iter()
+                    .map(|app| {debug!("app: {:?}", app); app})
                     .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID)
-                    .map(|app| app.session_id.to_owned());
-                if let Some(session_id) = session_id {
-                    let _ = tx.unbounded_send(Status::Connected(session_id));
+                    .map(|app| (app.session_id.to_owned(), app.transport_id.to_owned()));
+                if let Some((session, transport)) = channel {
+                    let _ = tx.unbounded_send(Status::Connected { session, transport });
                 }
             }
             payload => warn!("Got unknown payload on receiver channel: {:?}", payload),

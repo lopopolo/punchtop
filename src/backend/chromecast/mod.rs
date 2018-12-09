@@ -141,7 +141,7 @@ impl Device {
         Ok(())
     }
 
-    pub fn load(&self, track: Track) -> backend::Result {
+    pub fn load(&self, transport: String, track: Track) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self
             .media_server_bind_addr
@@ -154,13 +154,13 @@ impl Device {
         let media = track
             .metadata()
             .ok_or(Error::CannotLoadMedia(track.track))?;
-        cast.load(media);
+        cast.load(transport, media);
         Ok(())
     }
 
-    pub fn play(&self) -> backend::Result {
+    pub fn play(&self, transport: String) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        cast.play();
+        cast.play(transport);
         Ok(())
     }
 }

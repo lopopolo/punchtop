@@ -25,16 +25,18 @@ enum DecodeState {
 
 pub struct CastMessageCodec {
     state: DecodeState,
-    decode_counter: AtomicUsize,
-    encode_counter: AtomicUsize,
+    req_id: AtomicUsize,
+    decoded_frames: AtomicUsize,
+    encoded_frames: AtomicUsize,
 }
 
 impl CastMessageCodec {
     pub fn new() -> Self {
         CastMessageCodec {
             state: DecodeState::Header,
-            decode_counter: AtomicUsize::new(0),
-            encode_counter: AtomicUsize::new(0),
+            req_id: AtomicUsize::new(1),
+            decoded_frames: AtomicUsize::new(0),
+            encoded_frames: AtomicUsize::new(0),
         }
     }
 }
@@ -44,23 +46,26 @@ impl Encoder for CastMessageCodec {
     type Error = io::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let counter = self.encode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
+        let req_id = self.req_id.fetch_add(1usize, Ordering::SeqCst) as i32;
+        let encode_counter = self.encoded_frames.fetch_add(1usize, Ordering::SeqCst);
         debug!(
-            "CastMessageCodec encode-attempt={} command={:?}",
-            counter, item
+            "CastMessageCodec stream=encode frame-counter={} command={:?}",
+            encode_counter, item
         );
         let message = match item {
             Command::Close => message::connection::close(),
             Command::Connect => message::connection::connect(),
             Command::Heartbeat => message::heartbeat::ping(),
-            Command::Launch(ref app_id) => message::receiver::launch(counter, app_id),
-            Command::Load(session_id, media) => message::media::load(counter, &session_id, media),
-            Command::MediaStatus => message::media::status(counter),
+            Command::Launch(ref app_id) => message::receiver::launch(req_id, app_id),
+            Command::Load { session, transport, media } =>
+                message::media::load(req_id, &session, &transport, media),
+            Command::MediaStatus { transport } => message::media::status(req_id, &transport),
             Command::Pause => unimplemented!(),
-            Command::Play(media_session_id) => message::media::play(counter, media_session_id),
-            Command::ReceiverStatus => message::receiver::status(counter),
+            Command::Play { media_session, transport } =>
+                message::media::play(req_id, &transport, media_session),
+            Command::ReceiverStatus => message::receiver::status(req_id),
             Command::Seek(_) => unimplemented!(),
-            Command::Stop(ref session_id) => message::receiver::stop(counter, session_id),
+            Command::Stop(ref session_id) => message::receiver::stop(req_id, session_id),
             Command::Volume(_, _) => unimplemented!(),
         };
 
@@ -110,8 +115,6 @@ impl Decoder for CastMessageCodec {
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let counter = self.decode_counter.fetch_add(1usize, Ordering::SeqCst) as i32;
-        debug!("Decoding message {}", counter);
         let n = match self.state {
             DecodeState::Header => match self.decode_header(src) {
                 Some(n) => {
@@ -122,10 +125,11 @@ impl Decoder for CastMessageCodec {
             },
             DecodeState::Payload(n) => n,
         };
-        match self.decode_payload(n, src) {
+        let message = match self.decode_payload(n, src) {
             Some(mut src) => {
                 self.state = DecodeState::Header;
                 src.reserve(CAST_MESSAGE_HEADER_LENGTH);
+                debug!("attempt to decode: {:?}", src);
                 let message = protobuf::parse_from_bytes::<CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 warn!("message with namespace: {:?}", message.get_namespace());
@@ -162,6 +166,12 @@ impl Decoder for CastMessageCodec {
                 }
             }
             None => Ok(None),
-        }
+        };
+        let decode_counter = self.decoded_frames.fetch_add(1usize, Ordering::SeqCst);
+        debug!(
+            "CastMessageCodec stream=decode frame-counter={} message={:?}",
+            decode_counter, message
+        );
+        message
     }
 }
