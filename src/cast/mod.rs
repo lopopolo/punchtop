@@ -3,7 +3,6 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 
 use futures::prelude::*;
@@ -207,16 +206,16 @@ enum DecodeState {
 
 struct CastMessageCodec {
     state: DecodeState,
-    decode_counter: Arc<AtomicUsize>,
-    encode_counter: Arc<AtomicUsize>,
+    decode_counter: AtomicUsize,
+    encode_counter: AtomicUsize,
 }
 
 impl CastMessageCodec {
     fn new() -> Self {
         CastMessageCodec {
             state: DecodeState::Header,
-            decode_counter: Arc::new(AtomicUsize::new(0)),
-            encode_counter: Arc::new(AtomicUsize::new(0)),
+            decode_counter: AtomicUsize::new(0),
+            encode_counter: AtomicUsize::new(0),
         }
     }
 }
