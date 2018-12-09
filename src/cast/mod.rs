@@ -33,8 +33,6 @@ pub enum ChannelMessage {
 
 #[derive(Debug)]
 pub struct Chromecast {
-    pub session: Option<String>,
-    pub media_session: Option<i32>,
     command: UnboundedSender<Command>,
     status: UnboundedSender<Status>,
 }
@@ -46,28 +44,24 @@ impl Chromecast {
         };
         let _ = self
             .command
-            .unbounded_send(Command::Connect {
-                destination: message::DEFAULT_DESTINATION_ID.to_owned(),
-            })
+            .unbounded_send(Command::Connect(ReceiverConnection {
+                session: message::DEFAULT_DESTINATION_ID.to_owned(),
+                transport: message::DEFAULT_DESTINATION_ID.to_owned(),
+            }))
             .and_then(|_| self.command.unbounded_send(launch));
     }
 
-    pub fn load(&self, transport: String, media: Media) {
-        if let Some(ref session) = self.session {
-            let _ = self
-                .command
-                .unbounded_send(Command::Load {
-                    session: session.to_owned(),
-                    transport,
-                    media
-                });
-        }
+    pub fn load(&self, connect: &ReceiverConnection, media: Media) {
+        let _ = self
+            .command
+            .unbounded_send(Command::Load {
+                connect: connect.clone(),
+                media
+            });
     }
 
-    pub fn play(&self, transport: String) {
-        if let Some(media_session) = self.media_session {
-            let _ = self.command.unbounded_send(Command::Play { media_session, transport });
-        }
+    pub fn play(&self, connect: &MediaConnection) {
+        let _ = self.command.unbounded_send(Command::Play(connect.clone()));
     }
 }
 
@@ -100,8 +94,6 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> (Chromecas
     let (status_tx, status_rx) = unbounded();
 
     let cast = Chromecast {
-        session: None,
-        media_session: None,
         command: command_tx.clone(),
         status: status_tx.clone(),
     };
@@ -159,9 +151,7 @@ fn status(state: Mutex<ConnectState>, status: UnboundedSender<Command>) -> impl 
         .for_each(move |state| {
             let _ = status.unbounded_send(Command::ReceiverStatus);
             if let Some(connect) = state.media_connection() {
-                let _ = status.unbounded_send(Command::MediaStatus {
-                    transport: connect.transport.to_owned(),
-                });
+                let _ = status.unbounded_send(Command::MediaStatus(connect.clone()));
             }
             Ok(())
         })
@@ -175,10 +165,7 @@ fn read(
     command: UnboundedSender<Command>
 ) {
     match message {
-        ChannelMessage::Heartbeat(_) => {
-            debug!("Got heartbeat");
-            let _ = command.unbounded_send(Command::ReceiverStatus);
-        }
+        ChannelMessage::Heartbeat(_) => trace!("Got heartbeat"),
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
                 let app = status
@@ -189,24 +176,18 @@ fn read(
                 let transport = app.map(|app| app.transport_id.to_owned());
                 let connect = connect_state.lock()
                     .map(move |mut state| {
-                        warn!("acquired connect state lock receiver status");
-                        let was_connected = state.is_connected();
-                        if let (Some(session), None) = (session.as_ref(), state.session.as_ref()) {
-                            state.session = Some(session.to_owned());
-                        }
-                        if let (Some(transport), None) = (transport.as_ref(), state.transport.as_ref()) {
-                            state.transport = Some(transport.to_owned());
-                        }
-                        if let (Some(ref transport), false) = (transport, was_connected) {
-                            warn!("connecting to transport {}", transport);
+                        trace!("Acquired connect state lock in receiver status");
+                        state.set_session(session.deref());
+                        let did_connect = session.is_some() &&
+                            transport.is_some() &&
+                            state.set_transport(transport.deref());
+                        if let (Some(ref connect), true) = (state.media_connection(), did_connect) {
+                            debug!("Connecting to transport {}", connect.receiver.transport);
+                            let _ = tx.unbounded_send(Status::Connected(connect.receiver.clone()));
                             // we've connected to the default receiver. Now connect to
                             // the transport backing the launched app session.
-                            let _ = command.unbounded_send(Command::Connect {
-                                destination: transport.to_owned(),
-                            });
-                            let _ = command.unbounded_send(Command::MediaStatus {
-                                transport: transport.to_owned(),
-                            });
+                            let _ = command.unbounded_send(Command::Connect(connect.receiver.clone()));
+                            let _ = command.unbounded_send(Command::MediaStatus(connect.clone()));
                         }
                         ()
                     });
@@ -216,23 +197,16 @@ fn read(
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
-                debug!("Got media status: {:?}", status);
                 let media_session = status.first().map(|status| status.media_session_id);
                 let connect = connect_state.lock()
                     .map(move |mut state| {
-                        warn!("acquired connect state lock media status: {:?}", state.media_connection());
-                        let was_connected = state.media_session.is_some();
-                        if let (Some(media_session), None) = (media_session, state.media_session) {
-                            warn!("set media session");
-                            state.media_session = Some(media_session);
-                        }
-                        if let (Some(connection), false) = (state.media_connection(), was_connected) {
-                            warn!("sending connected message");
-                            let _ = tx.unbounded_send(Status::Connected {
-                                transport: connection.transport.to_owned(),
-                                session: connection.session.to_owned(),
-                                media_session: connection.media_session,
-                            });
+                        trace!("Acquired connect state lock in media status: {:?}", state.media_connection());
+                        let did_connect = state.set_media_session(media_session);
+                        if let Some(connection) = state.media_connection() {
+                            if did_connect && connection.session.is_some() {
+                                info!("Media session established with session id={:?}", media_session);
+                                let _ = tx.unbounded_send(Status::MediaConnected(connection));
+                            }
                         }
                         ()
                     });

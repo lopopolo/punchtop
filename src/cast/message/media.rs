@@ -37,10 +37,10 @@ pub fn play(request_id: i32, transport_id: &str, media_session_id: i32) -> Resul
     Ok(message(transport_id, payload))
 }
 
-pub fn status(request_id: i32, transport_id: &str) -> Result<CastMessage, Error> {
+pub fn status(request_id: i32, transport_id: &str, media_session_id: Option<i32>) -> Result<CastMessage, Error> {
     let payload = to_string(&media::Payload::GetStatus {
         request_id,
-        media_session_id: None,
+        media_session_id: media_session_id,
     })?;
     Ok(message(transport_id, payload))
 }

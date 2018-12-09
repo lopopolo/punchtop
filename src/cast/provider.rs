@@ -54,30 +54,25 @@ impl fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum Command {
-    Close { destination: String },
-    Connect { destination: String },
+    Close(ReceiverConnection),
+    Connect(ReceiverConnection),
     Heartbeat,
     Launch { app_id: String },
-    Load { session: String, transport: String, media: Media },
-    MediaStatus { transport: String },
-    Pause,
-    Play { media_session: i32, transport: String },
+    Load { connect: ReceiverConnection, media: Media },
+    MediaStatus(MediaConnection),
+    Pause(MediaConnection),
+    Play(MediaConnection),
     ReceiverStatus,
-    Seek(f32),
-    Stop { media_session: String, transport: String },
-    VolumeLevel(f32),
-    VolumeMute(bool),
+    Seek(MediaConnection, f32),
+    Stop(MediaConnection),
+    VolumeLevel(MediaConnection, f32),
+    VolumeMute(MediaConnection, bool),
 }
 
 #[derive(Debug)]
 pub enum Status {
-    Connected {
-        transport: String,
-        session: String,
-        media_session: i32,
-    },
-    Media,
-    MediaConnected(i32),
+    Connected(ReceiverConnection),
+    MediaConnected(MediaConnection),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,
@@ -86,31 +81,66 @@ pub enum Status {
 
 #[derive(Debug, Default)]
 pub struct ConnectState {
-    pub session: Option<String>,
-    pub transport: Option<String>,
-    pub media_session: Option<i32>,
+    session: Option<String>,
+    transport: Option<String>,
+    media_session: Option<i32>,
 }
 
 impl ConnectState {
-    pub fn is_connected(&self) -> bool {
-        self.session.is_some() && self.transport.is_some()
-    }
-
-    pub fn media_connection(&self) -> Option<MediaConnection> {
-        match (self.transport.as_ref(), self.session.as_ref(), self.media_session) {
-            (Some(transport), Some(session), Some(media_session)) => Some(MediaConnection {
-                transport: transport.to_owned(),
+    pub fn receiver_connection(&self) -> Option<ReceiverConnection> {
+        match (self.session.as_ref(), self.transport.as_ref()) {
+            (Some(session), Some(transport)) => Some(ReceiverConnection {
                 session: session.to_owned(),
-                media_session: media_session,
+                transport: transport.to_owned(),
             }),
             _ => None,
         }
     }
+
+    pub fn media_connection(&self) -> Option<MediaConnection> {
+        self.receiver_connection()
+            .map(|receiver| MediaConnection {
+                receiver,
+                session: self.media_session,
+            })
+    }
+
+    pub fn set_session(&mut self, session: Option<&str>) -> bool {
+        let mut changed = false;
+        if self.session.deref() != session {
+            changed = true;
+            self.session = session.map(String::from);
+        }
+        changed
+    }
+
+    pub fn set_transport(&mut self, transport: Option<&str>) -> bool {
+        let mut changed = false;
+        if self.transport.deref() != transport {
+            changed = true;
+            self.transport = transport.map(String::from);
+        }
+        changed
+    }
+
+    pub fn set_media_session(&mut self, media_session: Option<i32>) -> bool {
+        let mut changed = false;
+        if self.media_session != media_session {
+            changed = true;
+            self.media_session = media_session;
+        }
+        changed
+    }
 }
 
-#[derive(Debug)]
-pub struct MediaConnection {
-    pub transport: String,
+#[derive(Clone, Debug)]
+pub struct ReceiverConnection {
     pub session: String,
-    pub media_session: i32,
+    pub transport: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaConnection {
+    pub receiver: ReceiverConnection,
+    pub session: Option<i32>,
 }

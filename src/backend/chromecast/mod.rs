@@ -20,7 +20,7 @@ const SERVICE_NAME: &str = "_googlecast._tcp.local";
 /// Key in DNS TXT record for Chromecast "friendly name".
 const CHROMECAST_NAME_KEY: &str = "fn";
 /// Timeout for discovering Chromecast devices with mdns.
-const DISCOVER_TIMEOUT: Duration = Duration::from_millis(1000);
+const DISCOVER_TIMEOUT: Duration = Duration::from_millis(3000);
 
 /// Configuration for Chromecast endpoints.
 struct CastAddr {
@@ -133,15 +133,17 @@ impl Device {
         }
     }
 
+    /*
     pub fn close(&self) -> backend::Result {
         if let Some(ref cast) = self.cast {
-            // cast.stop();
-            // cast.close();
+            cast.stop();
+            cast.close();
         }
         Ok(())
     }
+    */
 
-    pub fn load(&self, connect: super::super::Connection, track: Track) -> backend::Result {
+    pub fn load(&self, connect: &cast::ReceiverConnection, track: Track) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self
             .media_server_bind_addr
@@ -154,13 +156,13 @@ impl Device {
         let media = track
             .metadata()
             .ok_or(Error::CannotLoadMedia(track.track))?;
-        cast.load(connect.transport, media);
+        cast.load(connect, media);
         Ok(())
     }
 
-    pub fn play(&self, connect: super::super::Connection) -> backend::Result {
+    pub fn play(&self, connect: &cast::MediaConnection) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        cast.play(connect.transport);
+        cast.play(connect);
         Ok(())
     }
 }

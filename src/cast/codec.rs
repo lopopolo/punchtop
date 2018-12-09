@@ -53,21 +53,17 @@ impl Encoder for CastMessageCodec {
             encode_counter, item
         );
         let message = match item {
-            Command::Close { destination } => message::connection::close(&destination),
-            Command::Connect { destination } => message::connection::connect(&destination),
+            Command::Close(connect) => message::connection::close(&connect.transport),
+            Command::Connect(connect) => message::connection::connect(&connect.transport),
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(req_id, &app_id),
-            Command::Load { session, transport, media } =>
-                message::media::load(req_id, &session, &transport, media),
-            Command::MediaStatus { transport } => message::media::status(req_id, &transport),
-            Command::Pause => unimplemented!(),
-            Command::Play { media_session, transport } =>
-                message::media::play(req_id, &transport, media_session),
+            Command::Load { connect, media } =>
+                message::media::load(req_id, &connect.session, &connect.transport, media),
+            Command::MediaStatus(connect) => message::media::status(req_id, &connect.receiver.transport, connect.session),
+            Command::Play(ref connect) if connect.session.is_some() =>
+                message::media::play(req_id, &connect.receiver.transport, connect.session.unwrap()),
             Command::ReceiverStatus => message::receiver::status(req_id),
-            Command::Seek(_) => unimplemented!(),
-            Command::Stop { transport, media_session } => message::receiver::stop(req_id, &transport, &media_session),
-            Command::VolumeLevel(_) => unimplemented!(),
-            Command::VolumeMute(_) => unimplemented!(),
+            _ => unimplemented!(),
         };
 
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;

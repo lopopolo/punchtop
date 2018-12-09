@@ -52,56 +52,24 @@ use cast::Status;
 struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
-    connect: Option<Connection>,
-}
-
-#[derive(Clone, Debug)]
-struct Connection {
-    transport: String,
-    session: String,
-    media_session: i32,
+    connect: Option<cast::ReceiverConnection>,
+    media_connect: Option<cast::MediaConnection>,
 }
 
 impl Game {
-    fn session(&self) -> Option<String> {
-        self.client
-            .cast
-            .as_ref()
-            .and_then(|cast| cast.session.to_owned())
-    }
-
-    fn set_session(&mut self, session: String) {
-        if let Some(ref mut cast) = self.client.cast {
-            cast.session = Some(session);
-        }
-    }
-
-    fn media_session(&self) -> Option<i32> {
-        self.client
-            .cast
-            .as_ref()
-            .and_then(|cast| cast.media_session)
-    }
-
-    fn set_media_session(&mut self, session: i32) {
-        if let Some(ref mut cast) = self.client.cast {
-            cast.media_session = Some(session);
-        }
-    }
-
     fn load_next(&mut self) -> Option<()> {
         let connect = match self.connect {
             Some(ref connect) => connect,
             None => return None,
         };
         self.playlist.next().map(|track| {
-            let _ = self.client.load(connect.clone(), track);
+            let _ = self.client.load(connect, track);
         })
     }
 
     fn play(&self) {
-        if let Some(ref connect) = self.connect {
-            let _ = self.client.play(connect.clone());
+        if let Some(ref connect) = self.media_connect {
+            let _ = self.client.play(connect);
         };
     }
 }
@@ -113,7 +81,7 @@ fn main() {
     let config = playlist::Config::new(Duration::new(5, 0), 10, root);
     let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "TV");
+        .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
         let status = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(config);
@@ -121,17 +89,20 @@ fn main() {
             playlist,
             client: backend,
             connect: None,
+            media_connect: None,
         };
         let play_loop = status
             .for_each(move |message| {
-                info!("message: {:?}", message);
                 match message {
-                    Status::Connected { transport, session, media_session } => {
-                        let connect = Connection { transport, session, media_session };
-                        info!("Connected: {:?}", connect);
+                    Status::Connected(connect) => {
                         game.connect = Some(connect);
                         game.load_next();
-                        game.play();
+                    },
+                    Status::MediaConnected(connect) => {
+                        game.media_connect = Some(connect.clone());
+                        if connect.session.is_none() {
+                            game.play();
+                        }
                     },
                     message => warn!("Got unknown message: {:?}", message),
                 };
