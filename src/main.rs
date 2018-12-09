@@ -5,6 +5,7 @@ extern crate bytes;
 extern crate env_logger;
 extern crate floating_duration;
 extern crate futures;
+extern crate futures_locks;
 extern crate hostname;
 #[macro_use]
 extern crate log;
@@ -51,7 +52,14 @@ use cast::Status;
 struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
+    connect: Option<Connection>,
+}
+
+#[derive(Clone, Debug)]
+struct Connection {
     transport: String,
+    session: String,
+    media_session: i32,
 }
 
 impl Game {
@@ -82,17 +90,19 @@ impl Game {
     }
 
     fn load_next(&mut self) -> Option<()> {
-        match self.playlist.next() {
-            Some(track) => {
-                let _ = self.client.load(self.transport.to_owned(), track);
-                Some(())
-            }
-            None => None,
-        }
+        let connect = match self.connect {
+            Some(ref connect) => connect,
+            None => return None,
+        };
+        self.playlist.next().map(|track| {
+            let _ = self.client.load(connect.clone(), track);
+        })
     }
 
     fn play(&self) {
-        let _ = self.client.play(self.transport.to_owned());
+        if let Some(ref connect) = self.connect {
+            let _ = self.client.play(connect.clone());
+        };
     }
 }
 
@@ -110,27 +120,18 @@ fn main() {
         let mut game = Game {
             playlist,
             client: backend,
-            transport: "".to_owned(),
+            connect: None,
         };
         let play_loop = status
             .for_each(move |message| {
                 info!("message: {:?}", message);
                 match message {
-                    Status::Connected { session, transport } => match game.session() {
-                        Some(_) => {}
-                        None => {
-                            info!("set session/transport id: ({}, {})", session, transport);
-                            game.set_session(session);
-                            game.transport = transport;
-                            game.load_next();
-                        }
-                    },
-                    Status::MediaConnected(media_session_id) => match game.media_session() {
-                        Some(_) => {}
-                        None => {
-                            game.set_media_session(media_session_id);
-                            game.play();
-                        }
+                    Status::Connected { transport, session, media_session } => {
+                        let connect = Connection { transport, session, media_session };
+                        info!("Connected: {:?}", connect);
+                        game.connect = Some(connect);
+                        game.load_next();
+                        game.play();
                     },
                     message => warn!("Got unknown message: {:?}", message),
                 };

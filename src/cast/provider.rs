@@ -71,11 +71,45 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum Status {
-    Connected { session: String, transport: String },
+    Connected {
+        transport: String,
+        session: String,
+        media_session: i32,
+    },
     Media,
     MediaConnected(i32),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,
     InvalidRequest,
+}
+
+#[derive(Debug, Default)]
+pub struct ConnectState {
+    pub session: Option<String>,
+    pub transport: Option<String>,
+    pub media_session: Option<i32>,
+}
+
+impl ConnectState {
+    pub fn is_connected(&self) -> bool {
+        self.session.is_some() && self.transport.is_some()
+    }
+
+    pub fn media_connection(&self) -> Option<MediaConnection> {
+        match (self.transport.as_ref(), self.session.as_ref(), self.media_session) {
+            (Some(transport), Some(session), Some(media_session)) => Some(MediaConnection {
+                transport: transport.to_owned(),
+                session: session.to_owned(),
+                media_session: media_session,
+            }),
+            _ => None,
+        }
+    }
+}
+
+pub struct MediaConnection {
+    pub transport: String,
+    pub session: String,
+    pub media_session: i32,
 }

@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{future, Future};
+use futures::{future, Future, Stream};
+use futures_locks::Mutex;
 use tokio::codec::Framed;
 use tokio::net::TcpStream;
 use tokio::timer::Interval;
@@ -104,12 +105,14 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> (Chromecas
         command: command_tx.clone(),
         status: status_tx.clone(),
     };
+    let connect_state = Mutex::new(ConnectState::default());
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-        tokio::spawn(reader(source, status_tx.clone(), command_tx.clone()));
+        tokio::spawn(reader(source, connect_state.clone(), status_tx.clone(), command_tx.clone()));
         tokio::spawn(writer(sink, command_rx));
         tokio::spawn(heartbeat(command_tx.clone()));
+        tokio::spawn(status(connect_state.clone(), command_tx.clone()));
     });
     rt.spawn(init.map_err(|_| ()));
     (cast, status_rx)
@@ -117,11 +120,14 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> (Chromecas
 
 fn reader(
     source: impl Stream<Item = ChannelMessage, Error = io::Error>,
+    connect_state: Mutex<ConnectState>,
     status: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {
     source
-        .for_each(move |message| Ok(read(message, status.clone(), command.clone())))
+        .for_each(move |message| {
+            Ok(read(message, connect_state.clone(), status.clone(), command.clone()))
+        })
         .map(|_| ())
         .map_err(|err| warn!("Error on send: {:?}", err))
 }
@@ -145,7 +151,29 @@ fn heartbeat(heartbeat: UnboundedSender<Command>) -> impl Future<Item = (), Erro
         .map_err(|err| warn!("Error on heartbeat: {:?}", err))
 }
 
-fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: UnboundedSender<Command>) {
+fn status(state: Mutex<ConnectState>, status: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
+    Interval::new_interval(Duration::from_millis(50))
+        .map_err(|err| ())
+        .and_then(move |_| state.lock())
+        .map_err(|_| ())
+        .for_each(move |state| {
+            let _ = status.unbounded_send(Command::ReceiverStatus);
+            if let Some(connect) = state.media_connection() {
+                let _ = status.unbounded_send(Command::MediaStatus {
+                    transport: connect.transport.to_owned(),
+                });
+            }
+            Ok(())
+        })
+        .map_err(|err| warn!("Error on status: {:?}", err))
+}
+
+fn read(
+    message: ChannelMessage,
+    connect_state: Mutex<ConnectState>,
+    tx: UnboundedSender<Status>,
+    command: UnboundedSender<Command>
+) {
     debug!("Message on receiver channel");
     match message {
         ChannelMessage::Heartbeat(_) => {
@@ -154,32 +182,55 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
-                debug!("Got receiver status: {:?}", status);
-                let channel = status
+                let app = status
                     .applications
                     .iter()
                     .map(|app| {debug!("app: {:?}", app); app})
-                    .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID)
-                    .map(|app| (app.session_id.to_owned(), app.transport_id.to_owned()));
-                if let Some((session, transport)) = channel {
-                    let _ = tx.unbounded_send(Status::Connected {
-                        session,
-                        transport: transport.to_owned(),
+                    .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
+                let session = app.map(|app| app.session_id.to_owned());
+                let transport = app.map(|app| app.transport_id.to_owned());
+                let connect = connect_state.lock()
+                    .map(move |mut state| {
+                        let was_connected = state.is_connected();
+                        if let (Some(session), None) = (session.as_ref(), state.session.as_ref()) {
+                            state.session = Some(session.to_owned());
+                        }
+                        if let (Some(transport), None) = (transport.as_ref(), state.transport.as_ref()) {
+                            state.transport = Some(transport.to_owned());
+                        }
+                        if let (Some(ref transport), false) = (transport, was_connected) {
+                            // we've connected to the default receiver. Now connect to
+                            // the transport backing the launched app session.
+                            let _ = command.unbounded_send(Command::Connect {
+                                destination: transport.to_owned(),
+                            });
+                        }
+                        ()
                     });
-                    let _ = command.unbounded_send(Command::Connect {
-                        destination: transport,
-                    });
-                }
+                tokio::spawn(connect);
             }
             payload => warn!("Got unknown payload on receiver channel: {:?}", payload),
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
                 debug!("Got media status");
-                let media_session_id = status.first().map(|status| status.media_session_id);
-                if let Some(media_session_id) = media_session_id {
-                    let _ = tx.unbounded_send(Status::MediaConnected(media_session_id));
-                }
+                let media_session = status.first().map(|status| status.media_session_id);
+                let connect = connect_state.lock()
+                    .map(move |mut state| {
+                        let was_connected = state.media_session.is_some();
+                        if let (Some(media_session), None) = (media_session, state.media_session) {
+                            state.media_session = Some(media_session);
+                        }
+                        if let (Some(connection), false) = (state.media_connection(), was_connected) {
+                            let _ = tx.unbounded_send(Status::Connected {
+                                transport: connection.transport.to_owned(),
+                                session: connection.session.to_owned(),
+                                media_session: connection.media_session,
+                            });
+                        }
+                        ()
+                    });
+                tokio::spawn(connect);
             }
             payload => warn!("Got unknown payload on media channel: {:?}", payload),
         },
