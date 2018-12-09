@@ -8,14 +8,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::sink::Sink;
+use futures::prelude::*;
+use futures::{future, Future};
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{Future, Stream};
-use native_tls::TlsConnector;
 use tokio::codec::{Decoder, Encoder, Framed};
 use tokio::net::TcpStream;
-use tokio::runtime::Runtime;
 use tokio::timer::Interval;
+use tokio_tls::{TlsConnector, TlsStream};
 use url::Url;
 
 pub mod payload;
@@ -98,7 +97,7 @@ pub enum Command {
     Load(String, Media),
     MediaStatus(String),
     Pause,
-    Play,
+    Play(i32),
     ReceiverStatus,
     Seek(f32),
     Stop(String),
@@ -109,6 +108,7 @@ pub enum Command {
 pub enum Status {
     Connected(String),
     Media,
+    MediaConnected(i32),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,
@@ -117,7 +117,9 @@ pub enum Status {
 
 #[derive(Debug)]
 pub struct Chromecast {
-    chan: Channel<Command, Status>,
+    pub chan: Channel<Command, Status>,
+    pub session_id: Option<String>,
+    pub media_session_id: Option<i32>,
 }
 
 impl Chromecast {
@@ -125,8 +127,22 @@ impl Chromecast {
         let _ = self.chan.tx.unbounded_send(Command::ReceiverStatus);
     }
 
-    pub fn play(&self, session_id: String, media: Media) {
-        let _ = self.chan.tx.unbounded_send(Command::Load(session_id, media));
+    pub fn launch_app(&self) {
+        let launch = Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned());
+        let _ = self.chan.tx.unbounded_send(Command::Connect)
+            .and_then(|_| self.chan.tx.unbounded_send(launch));
+    }
+
+    pub fn load(&self, media: Media) {
+        if let Some(ref session_id) = self.session_id {
+            let _ = self.chan.tx.unbounded_send(Command::Load(session_id.to_owned(), media));
+        }
+    }
+
+    pub fn play(&self) {
+        if let Some(media_session_id) = self.media_session_id {
+            let _ = self.chan.tx.unbounded_send(Command::Play(media_session_id));
+        }
     }
 
     pub fn stop(&self) {
@@ -141,87 +157,85 @@ impl Chromecast {
     }
 }
 
-pub fn connect(rt: &mut Runtime, addr: SocketAddr) -> Result<Chromecast, Error> {
-    let socket = TcpStream::connect(&addr);
-    let cx = TlsConnector::builder()
+/// Asynchronously establish a TLS connection.
+fn tls_connect(addr: SocketAddr) -> impl Future<Item=TlsStream<TcpStream>, Error=io::Error> {
+    let connector = native_tls::TlsConnector::builder()
         .danger_accept_invalid_hostnames(true)
         .danger_accept_invalid_certs(true)
         .build()
-        .map(tokio_tls::TlsConnector::from)
-        .map_err(|_| Error::Connect)?;
+        .map(TlsConnector::from)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+    let connector = match connector {
+        Ok(connector) => connector,
+        Err(err) => return future::Either::A(future::err(err)),
+    };
+    let connect = TcpStream::connect(&addr)
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        .and_then(move |socket| {
+            info!("Establishing TLS connection at {:?}", addr);
+            let domain = format!("{}", addr.ip());
+            connector.connect(&domain, socket)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        });
+    future::Either::B(connect)
+}
 
+pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> Chromecast {
     let (command_tx, command_rx) = unbounded();
     let (status_tx, status_rx) = unbounded();
-    let command = command_tx.clone();
-    let heartbeat = command_tx.clone();
 
     let cast = Chromecast {
         chan: Channel {
-            tx: command_tx,
+            tx: command_tx.clone(),
             rx: status_rx,
         },
+        session_id: None,
+        media_session_id: None,
     };
-
-    let connect = socket
-        .and_then(move |socket| {
-            info!("Establishing TLS connection with Chromecast");
-            cx.connect(&format!("{}", addr.ip()), socket)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-        })
+    let init = tls_connect(addr)
         .map(move |socket| {
-            info!("Chomecast connect successful");
+            info!("TLS connection established");
             let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-            let rx = source
-                .for_each(move |message| {
-                    let status = status_tx.clone();
-                    let command = command.clone();
-                    Ok(read(message, status, command))
-                })
-                .map(|_| ())
-                .map_err(|err| {
-                    warn!(
-                        "Error running future Chromecast TLS payload reader: {:?}",
-                        err
-                    )
-                });
-            let tx = command_rx
-                .forward(sink.sink_map_err(|_| ()))
-                .map(|_| ())
-                .map_err(|err| {
-                    warn!(
-                        "Error running future Chromecast receiver channel: {:?}",
-                        err
-                    )
-                });
-            let heartbeat = Interval::new_interval(Duration::new(5, 0))
-                .map(|_| Command::Heartbeat)
-                .map_err(|_| ())
-                .forward(heartbeat.sink_map_err(|_| ()))
-                .map(|_| ())
-                .map_err(|err| {
-                    warn!(
-                        "Error running future Chromecast heartbeat channel: {:?}",
-                        err
-                    )
-                });
-            tokio::spawn(rx);
-            tokio::spawn(tx);
-            tokio::spawn(heartbeat);
+            tokio::spawn(reader(source, status_tx, command_tx.clone()));
+            tokio::spawn(writer(sink, command_rx));
+            tokio::spawn(heartbeat(command_tx.clone()));
+        });
+    rt.spawn(init.map_err(|_| ()));
+    cast
+}
+
+fn reader(
+    source: impl Stream<Item=ChannelMessage, Error=io::Error>,
+    status: UnboundedSender<Status>,
+    command: UnboundedSender<Command>
+) -> impl Future<Item=(), Error=()> {
+    source
+        .for_each(move |message| {
+            Ok(read(message, status.clone(), command.clone()))
         })
         .map(|_| ())
-        .map_err(|err| warn!("Error running future Chromecast connect: {:?}", err));
+        .map_err(|err| warn!("Error on send: {:?}", err))
+}
 
-    rt.spawn(connect);
-    cast.chan
-        .tx
-        .unbounded_send(Command::Connect)
-        .and_then(|_| {
-            cast.chan
-                .tx
-                .unbounded_send(Command::Launch(DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned()))
-        })
-        .map(|_| cast)
-        .map_err(|_| Error::Connect)
+fn writer(
+    sink: impl Sink<SinkItem=Command, SinkError=io::Error>,
+    command: UnboundedReceiver<Command>
+) -> impl Future<Item=(), Error=()> {
+    command
+        .forward(sink.sink_map_err(|_| ()))
+        .map(|_| ())
+        .map_err(|err| warn!("Error on recv: {:?}", err))
+}
+
+fn heartbeat(
+    heartbeat: UnboundedSender<Command>
+) -> impl Future<Item=(), Error=()> {
+    Interval::new_interval(Duration::new(5, 0))
+        .map(|_| Command::Heartbeat)
+        .map_err(|_| ())
+        .forward(heartbeat.sink_map_err(|_| ()))
+        .map(|_| ())
+        .map_err(|err| warn!("Error on heartbeat: {:?}", err))
 }
 
 fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: UnboundedSender<Command>) {
@@ -233,14 +247,27 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
-                debug!("Got receiver stauts");
-                status
+                debug!("Got receiver stauts: {:?}", status);
+                let session_id = status
                     .applications
                     .iter()
                     .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID)
-                    .map(|app| app.session_id.to_owned())
-                    .map(Status::Connected)
-                    .map(|status| tx.unbounded_send(status));
+                    .map(|app| app.session_id.to_owned());
+                if let Some(session_id) = session_id {
+                    let _ = tx.unbounded_send(Status::Connected(session_id));
+                }
+            }
+            _ => {}
+        }
+        ChannelMessage::Media(message) => match message {
+            media::Payload::MediaStatus { status, .. } => {
+                debug!("Got media status");
+                let media_session_id = status
+                    .first()
+                    .map(|status| status.media_session_id);
+                if let Some(media_session_id) = media_session_id {
+                    let _ = tx.unbounded_send(Status::MediaConnected(media_session_id));
+                }
             }
             _ => {}
         }
@@ -287,7 +314,7 @@ impl Encoder for CastMessageCodec {
             Command::Load(session_id, media) => message::load(counter, &session_id, media),
             Command::MediaStatus(_) => unimplemented!(),
             Command::Pause => unimplemented!(),
-            Command::Play => unimplemented!(),
+            Command::Play(media_session_id) => message::play(counter, media_session_id),
             Command::ReceiverStatus => message::receiver_status(counter),
             Command::Seek(_) => unimplemented!(),
             Command::Stop(ref session_id) => message::stop(counter, session_id),
@@ -429,6 +456,15 @@ mod message {
             current_time: 0f32,
             custom_data: media::CustomData::new(),
             autoplay: true,
+        })?;
+        Ok(message(media::NAMESPACE, payload))
+    }
+
+    pub fn play(request_id: i32, media_session_id: i32) -> Result<proto::CastMessage, serde_json::Error> {
+        let payload = serde_json::to_string(&media::Payload::Play {
+            request_id,
+            media_session_id: media_session_id,
+            custom_data: media::CustomData::new(),
         })?;
         Ok(message(media::NAMESPACE, payload))
     }

@@ -105,7 +105,7 @@ impl<'a> CastTrack<'a> {
 pub struct Device {
     game_config: Config,
     connect_config: CastAddr,
-    cast: Option<(Chromecast, String)>,
+    pub cast: Option<Chromecast>, // TODO: don't expose this
     media_server_bind_addr: Option<SocketAddr>,
 }
 
@@ -118,29 +118,28 @@ impl Device {
         PlayerKind::Chromecast
     }
 
-    pub fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
+    pub fn connect(&mut self, rt: &mut tokio::runtime::Runtime) -> Result<cast::Chromecast, backend::Error> {
         match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
-                let cast = cast::connect(rt, self.connect_config.addr)
-                    .map_err(|_| Error::BackendNotInitialized)?;
-                self.cast = Some((cast, "".to_owned()));
-                Ok(())
+                let cast = cast::connect(self.connect_config.addr, rt);
+                cast.launch_app();
+                Ok(cast)
             }
             Err(_) => Err(Error::BackendNotInitialized),
         }
     }
 
     pub fn close(&self) -> backend::Result {
-        if let Some((ref cast, _)) = self.cast {
+        if let Some(ref cast) = self.cast {
             cast.stop();
             cast.close();
         }
         Ok(())
     }
 
-    pub fn play(&self, track: Track) -> backend::Result {
-        let (cast, session_id) = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+    pub fn load(&self, track: Track) -> backend::Result {
+        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
         let addr = self.media_server_bind_addr.ok_or(Error::BackendNotInitialized)?;
         let track = CastTrack {
             root: self.game_config.root(),
@@ -148,7 +147,13 @@ impl Device {
             track: track,
         };
         let media = track.metadata().ok_or(Error::CannotLoadMedia(track.track))?;
-        cast.play(session_id.to_owned(), media);
+        cast.load(media);
+        Ok(())
+    }
+
+    pub fn play(&self) -> backend::Result {
+        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+        cast.play();
         Ok(())
     }
 }
