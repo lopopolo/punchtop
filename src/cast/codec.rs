@@ -48,7 +48,7 @@ impl Encoder for CastMessageCodec {
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let req_id = self.req_id.fetch_add(1usize, Ordering::SeqCst) as i32;
         let encode_counter = self.encoded_frames.fetch_add(1usize, Ordering::SeqCst);
-        debug!(
+        trace!(
             "CastMessageCodec stream=encode frame-counter={} command={:?}",
             encode_counter, item
         );
@@ -130,10 +130,9 @@ impl Decoder for CastMessageCodec {
             Some(mut src) => {
                 self.state = DecodeState::Header;
                 src.reserve(CAST_MESSAGE_HEADER_LENGTH);
-                debug!("attempt to decode: {:?}", src);
                 let message = protobuf::parse_from_bytes::<CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-                warn!("message with namespace: {:?}", message.get_namespace());
+                trace!("decoded message with namespace: {}", message.get_namespace());
                 match message.get_namespace() {
                     namespace::CONNECTION => {
                         serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
@@ -169,7 +168,7 @@ impl Decoder for CastMessageCodec {
             None => Ok(None),
         };
         let decode_counter = self.decoded_frames.fetch_add(1usize, Ordering::SeqCst);
-        debug!(
+        trace!(
             "CastMessageCodec stream=decode frame-counter={} message={:?}",
             decode_counter, message
         );

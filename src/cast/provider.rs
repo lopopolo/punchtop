@@ -108,6 +108,7 @@ impl ConnectState {
     }
 }
 
+#[derive(Debug)]
 pub struct MediaConnection {
     pub transport: String,
     pub session: String,

@@ -153,7 +153,7 @@ fn heartbeat(heartbeat: UnboundedSender<Command>) -> impl Future<Item = (), Erro
 
 fn status(state: Mutex<ConnectState>, status: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::from_millis(50))
-        .map_err(|err| ())
+        .map_err(|_| ())
         .and_then(move |_| state.lock())
         .map_err(|_| ())
         .for_each(move |state| {
@@ -174,7 +174,6 @@ fn read(
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>
 ) {
-    debug!("Message on receiver channel");
     match message {
         ChannelMessage::Heartbeat(_) => {
             debug!("Got heartbeat");
@@ -185,12 +184,12 @@ fn read(
                 let app = status
                     .applications
                     .iter()
-                    .map(|app| {debug!("app: {:?}", app); app})
                     .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
                 let session = app.map(|app| app.session_id.to_owned());
                 let transport = app.map(|app| app.transport_id.to_owned());
                 let connect = connect_state.lock()
                     .map(move |mut state| {
+                        warn!("acquired connect state lock receiver status");
                         let was_connected = state.is_connected();
                         if let (Some(session), None) = (session.as_ref(), state.session.as_ref()) {
                             state.session = Some(session.to_owned());
@@ -199,10 +198,14 @@ fn read(
                             state.transport = Some(transport.to_owned());
                         }
                         if let (Some(ref transport), false) = (transport, was_connected) {
+                            warn!("connecting to transport {}", transport);
                             // we've connected to the default receiver. Now connect to
                             // the transport backing the launched app session.
                             let _ = command.unbounded_send(Command::Connect {
                                 destination: transport.to_owned(),
+                            });
+                            let _ = command.unbounded_send(Command::MediaStatus {
+                                transport: transport.to_owned(),
                             });
                         }
                         ()
@@ -213,15 +216,18 @@ fn read(
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
-                debug!("Got media status");
+                debug!("Got media status: {:?}", status);
                 let media_session = status.first().map(|status| status.media_session_id);
                 let connect = connect_state.lock()
                     .map(move |mut state| {
+                        warn!("acquired connect state lock media status: {:?}", state.media_connection());
                         let was_connected = state.media_session.is_some();
                         if let (Some(media_session), None) = (media_session, state.media_session) {
+                            warn!("set media session");
                             state.media_session = Some(media_session);
                         }
                         if let (Some(connection), false) = (state.media_connection(), was_connected) {
+                            warn!("sending connected message");
                             let _ = tx.unbounded_send(Status::Connected {
                                 transport: connection.transport.to_owned(),
                                 session: connection.session.to_owned(),
