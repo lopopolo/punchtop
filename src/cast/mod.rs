@@ -148,7 +148,7 @@ fn read(message: ChannelMessage, tx: UnboundedSender<Status>, command: Unbounded
         }
         ChannelMessage::Receiver(message) => match message {
             receiver::Payload::ReceiverStatus { status, .. } => {
-                debug!("Got receiver stauts: {:?}", status);
+                debug!("Got receiver status: {:?}", status);
                 let session_id = status
                     .applications
                     .iter()

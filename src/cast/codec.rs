@@ -67,6 +67,7 @@ impl Encoder for CastMessageCodec {
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
         message::encode(message, &mut buf)
+            .map_err(|err| {warn!("encode err: {:?}", err); err})
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
@@ -127,6 +128,7 @@ impl Decoder for CastMessageCodec {
                 src.reserve(CAST_MESSAGE_HEADER_LENGTH);
                 let message = protobuf::parse_from_bytes::<CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                warn!("message with namespace: {:?}", message.get_namespace());
                 match message.get_namespace() {
                     namespace::CONNECTION => {
                         serde_json::from_str::<connection::Payload>(message.get_payload_utf8())

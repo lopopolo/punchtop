@@ -8,9 +8,9 @@ pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
 pub fn load(request_id: i32, session_id: &str, media: Media) -> Result<CastMessage, Error> {
     let media = {
-        let config = media::Media {
+        let config = media::MediaInformation {
             content_id: media.url.to_string(),
-            stream_type: "NONE".to_string(),
+            stream_type: media::StreamType::None,
             content_type: media.content_type,
             metadata: None,
             duration: None,
@@ -42,5 +42,6 @@ pub fn status(request_id: i32) -> Result<CastMessage, Error> {
         request_id,
         media_session_id: None,
     })?;
-    Ok(super::message(NAMESPACE, payload))
+    let msg = super::message(NAMESPACE, payload);
+    Ok(msg)
 }

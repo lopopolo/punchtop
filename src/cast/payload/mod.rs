@@ -35,7 +35,7 @@ pub mod media {
         Load {
             request_id: i32,
             session_id: String,
-            media: Media,
+            media: MediaInformation,
             current_time: f32,
             custom_data: CustomData,
             autoplay: bool,
@@ -62,7 +62,7 @@ pub mod media {
         Seek {
             request_id: i32,
             media_session_id: i32,
-            resume_state: Option<String>,
+            resume_state: Option<ResumeState>,
             current_time: Option<f32>,
             custom_data: CustomData,
         },
@@ -70,7 +70,7 @@ pub mod media {
         MediaStatus {
             #[serde(default)]
             request_id: i32,
-            status: Vec<Status>,
+            status: Vec<MediaStatus>,
         },
         #[serde(rename_all = "camelCase")]
         LoadCancelled { request_id: i32 },
@@ -86,16 +86,30 @@ pub mod media {
     }
 
     #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum ResumeState {
+        PlaybackStart,
+        PlaybackPause,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
-    pub struct Media {
+    pub struct MediaInformation {
         pub content_id: String,
-        #[serde(default)]
-        pub stream_type: String,
+        pub stream_type: StreamType,
         pub content_type: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub metadata: Option<Metadata>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub duration: Option<f32>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum StreamType {
+        None,
+        Buffered,
+        Live,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -197,15 +211,33 @@ pub mod media {
 
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
-    pub struct Status {
+    pub struct MediaStatus {
         pub media_session_id: i32,
         #[serde(default)]
-        pub media: Option<Media>,
+        pub media: Option<MediaInformation>,
         pub playback_rate: f32,
-        pub player_state: String,
-        pub idle_reason: Option<String>,
-        pub current_time: Option<f32>,
+        pub player_state: PlayerState,
+        pub idle_reason: Option<IdleReason>,
+        pub current_time: f32,
         pub supported_media_commands: u32,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum PlayerState {
+        Idle,
+        Playing,
+        Buffering,
+        Paused,
+    }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum IdleReason {
+        Cancelled,
+        Interrupted,
+        Finished,
+        Error,
     }
 }
 
