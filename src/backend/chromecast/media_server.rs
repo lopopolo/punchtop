@@ -41,9 +41,9 @@ pub fn spawn(root: &Path, cast: SocketAddr) -> Result<SocketAddr, Error> {
     default_interface_addr(cast)
         .and_then(get_available_port)
         .and_then(|addr| {
-            println!("mount media directory root={:?}", document_root);
+            debug!("mount directory root={:?}", document_root);
             rouille::Server::new(addr, move |request| {
-                println!("request={:?}", request);
+                debug!("got request at path={:?}", request.url());
                 if let Some(request) = request.remove_prefix("/media") {
                     rouille::match_assets(&request, &document_root)
                 } else if let Some(request) = request.remove_prefix("/image") {
@@ -56,7 +56,7 @@ pub fn spawn(root: &Path, cast: SocketAddr) -> Result<SocketAddr, Error> {
         })
         .map(|server| {
             let addr = server.server_addr();
-            println!("spawn http thread bind={:?}", addr);
+            info!("spawn at bind={:?}", addr);
             thread::spawn(move || server.run());
             addr
         })
