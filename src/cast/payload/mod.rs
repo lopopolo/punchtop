@@ -1,6 +1,4 @@
 pub mod connection {
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.connection";
-
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {
@@ -10,8 +8,6 @@ pub mod connection {
 }
 
 pub mod heartbeat {
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.heartbeat";
-
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {
@@ -23,8 +19,6 @@ pub mod heartbeat {
 pub mod media {
     ///! Structures for the media playback channel. See
     ///! [cast reference docs](https://developers.google.com/cast/docs/reference/messages).
-
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
     const METADATA_TYPE_MUSIC_TRACK: u32 = 3;
 
@@ -222,8 +216,6 @@ pub mod media {
 }
 
 pub mod receiver {
-    pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.receiver";
-
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {

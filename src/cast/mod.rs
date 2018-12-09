@@ -19,6 +19,7 @@ mod provider;
 mod payload;
 mod proto;
 
+use self::message::namespace::*;
 use self::payload::*;
 pub use self::provider::*;
 
@@ -231,17 +232,17 @@ impl Encoder for CastMessageCodec {
             counter, item
         );
         let message = match item {
-            Command::Close => message::close(),
-            Command::Connect => message::connect(),
-            Command::Heartbeat => message::ping(),
-            Command::Launch(ref app_id) => message::launch(counter, app_id),
-            Command::Load(session_id, media) => message::load(counter, &session_id, media),
+            Command::Close => message::connection::close(),
+            Command::Connect => message::connection::connect(),
+            Command::Heartbeat => message::heartbeat::ping(),
+            Command::Launch(ref app_id) => message::receiver::launch(counter, app_id),
+            Command::Load(session_id, media) => message::media::load(counter, &session_id, media),
             Command::MediaStatus(_) => unimplemented!(),
             Command::Pause => unimplemented!(),
-            Command::Play(media_session_id) => message::play(counter, media_session_id),
-            Command::ReceiverStatus => message::receiver_status(counter),
+            Command::Play(media_session_id) => message::media::play(counter, media_session_id),
+            Command::ReceiverStatus => message::receiver::status(counter),
             Command::Seek(_) => unimplemented!(),
-            Command::Stop(ref session_id) => message::stop(counter, session_id),
+            Command::Stop(ref session_id) => message::receiver::stop(counter, session_id),
             Command::Volume(_, _) => unimplemented!(),
         };
 
@@ -309,19 +310,19 @@ impl Decoder for CastMessageCodec {
                 let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 match message.get_namespace() {
-                    connection::NAMESPACE => serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
+                    CONNECTION => serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Connection)
                         .map(Some),
-                    heartbeat::NAMESPACE => serde_json::from_str::<heartbeat::Payload>(message.get_payload_utf8())
+                    HEARTBEAT => serde_json::from_str::<heartbeat::Payload>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Heartbeat)
                         .map(Some),
-                    media::NAMESPACE => serde_json::from_str::<media::Payload>(message.get_payload_utf8())
+                    MEDIA => serde_json::from_str::<media::Payload>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Media)
                         .map(Some),
-                    receiver::NAMESPACE => serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
+                    RECEIVER => serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(ChannelMessage::Receiver)
                         .map(Some),
