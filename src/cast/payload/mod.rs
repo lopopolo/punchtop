@@ -21,13 +21,12 @@ pub mod heartbeat {
 }
 
 pub mod media {
+    ///! Structures for the media playback channel. See
+    ///! [cast reference docs](https://developers.google.com/cast/docs/reference/messages).
+
     pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
-    const METADATA_TYPE_GENERIC: u32 = 0;
-    const METADATA_TYPE_MOVIE: u32 = 1;
-    const METADATA_TYPE_TV_SHOW: u32 = 2;
     const METADATA_TYPE_MUSIC_TRACK: u32 = 3;
-    const METADATA_TYPE_PHOTO: u32 = 4;
 
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
