@@ -2,7 +2,8 @@ pub mod connection {
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {
-        Connect,
+        #[serde(rename_all = "camelCase")]
+        Connect { user_agent: String },
         Close,
     }
 }
