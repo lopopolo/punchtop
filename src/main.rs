@@ -23,7 +23,6 @@ extern crate protobuf;
 extern crate rand;
 extern crate rodio;
 extern crate rouille;
-extern crate rust_cast;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
