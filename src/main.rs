@@ -47,12 +47,14 @@ mod playlist;
 
 use backend::PlayerKind;
 use cast::Status;
+use playlist::Config;
 
 struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
     connect: Option<cast::ReceiverConnection>,
     media_connect: Option<cast::MediaConnection>,
+    config: Config,
 }
 
 impl Game {
@@ -85,18 +87,19 @@ fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = playlist::Config::new(Duration::new(5, 0), 1, root);
+    let config = Config::new(Duration::new(60, 0), 20, root);
     let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
         let status = backend.connect(&mut rt).unwrap();
-        let playlist = playlist::Playlist::from_directory(config);
+        let playlist = playlist::Playlist::from_directory(&config);
         let mut game = Game {
             playlist,
             client: backend,
             connect: None,
             media_connect: None,
+            config,
         };
         let play_loop = status
             .for_each(move |message| {
@@ -111,7 +114,7 @@ fn main() {
                     }
                     Status::MediaStatus(status) => {
                         let advance = status.current_time
-                            > Duration::new(5, 0).as_fractional_secs()
+                            > game.config.duration.as_fractional_secs()
                             && game.media_connect.is_some();
                         if advance {
                             info!("Time limit reached. Advancing game");

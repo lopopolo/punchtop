@@ -78,7 +78,7 @@ pub struct Playlist {
 }
 
 impl Playlist {
-    pub fn from_directory(config: Config) -> Self {
+    pub fn from_directory(config: &Config) -> Self {
         let mut vec = Vec::new();
         let track_duration = config.duration;
         let walker = WalkDir::new(config.root())
@@ -102,7 +102,7 @@ impl Playlist {
 
         Playlist {
             tracks: VecDeque::from(vec),
-            config,
+            config: config.clone(),
             cursor: 0,
         }
     }
