@@ -35,7 +35,6 @@ extern crate url;
 extern crate walkdir;
 
 use std::path::PathBuf;
-use std::thread;
 use std::time::Duration;
 
 use floating_duration::TimeAsFloat;
@@ -47,7 +46,6 @@ mod cast;
 mod playlist;
 
 use backend::PlayerKind;
-use cast::media::PlayerState;
 use cast::Status;
 
 struct Game {

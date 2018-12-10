@@ -8,12 +8,12 @@ use futures::sync::mpsc::UnboundedReceiver;
 use mdns::RecordKind;
 use url::Url;
 
-use backend::{self, Error, Player, PlayerKind};
+use backend::{self, Error, PlayerKind};
 use playlist::{Config, Track};
 
 mod media_server;
 mod parser;
-use cast::{self, Chromecast, Image, Media, Status};
+use cast::{self, Chromecast, Image, Media};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";

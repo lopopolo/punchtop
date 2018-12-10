@@ -10,11 +10,6 @@ pub fn ping() -> Result<CastMessage, Error> {
     Ok(message(payload))
 }
 
-pub fn pong() -> Result<CastMessage, Error> {
-    let payload = to_string(&heartbeat::Payload::Pong)?;
-    Ok(message(payload))
-}
-
 fn message(payload: String) -> CastMessage {
     let mut msg = CastMessage::new();
     msg.set_payload_type(CastMessage_PayloadType::STRING);

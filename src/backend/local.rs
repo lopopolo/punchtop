@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::ffi::CStr;
 use std::fs::File;
 use std::io::BufReader;
@@ -8,7 +10,7 @@ use objc::runtime::Object;
 use rodio::{self, Decoder, Sink, Source};
 use tokio::runtime::Runtime;
 
-use backend::{self, Error, Player, PlayerKind};
+use backend::{self, Error, PlayerKind};
 use playlist::{Config, Track};
 
 /// Return a readable computer name using the localized name given
@@ -59,7 +61,7 @@ impl Device {
     }
 }
 
-impl Player for Device {
+impl Device {
     fn name(&self) -> String {
         computer_name()
             .or_else(get_hostname)
@@ -70,7 +72,7 @@ impl Player for Device {
         PlayerKind::Local
     }
 
-    fn connect(&mut self, rt: &mut Runtime) -> backend::Result {
+    fn connect(&mut self, _rt: &mut Runtime) -> backend::Result {
         Ok(())
     }
 
