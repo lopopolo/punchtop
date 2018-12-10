@@ -1,6 +1,5 @@
 use std::io;
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -9,7 +8,6 @@ use futures::{future, Future, Stream};
 use futures_locks::Mutex;
 use tokio::codec::Framed;
 use tokio::net::TcpStream;
-use tokio::timer::Interval;
 use tokio_tls::{TlsConnector, TlsStream};
 
 mod codec;
@@ -17,6 +15,7 @@ mod message;
 mod payload;
 mod proto;
 mod provider;
+mod worker;
 
 use self::codec::CastMessageCodec;
 pub use self::payload::*;
@@ -37,6 +36,7 @@ pub struct Chromecast {
     command: UnboundedSender<Command>,
     shutdown: (oneshot::Sender<()>, oneshot::Sender<()>, oneshot::Sender<()>),
     status: UnboundedSender<Status>,
+    connect: Mutex<ConnectState>
 }
 
 impl Chromecast {
@@ -54,12 +54,16 @@ impl Chromecast {
     }
 
     pub fn load(&self, connect: &ReceiverConnection, media: Media) {
-        let _ = self
-            .command
-            .unbounded_send(Command::Load {
-                connect: connect.clone(),
-                media
+        let command = self.command.clone();
+        let connect = connect.clone();
+        let task = worker::status::invalidate_media_connection(self.connect.clone());
+        let task = task.map(move |_| {
+            let _ = command.unbounded_send(Command::Load {
+                connect,
+                media,
             });
+        });
+        tokio::spawn(task);
     }
 
     pub fn play(&self, connect: &MediaConnection) {
@@ -109,30 +113,32 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> (Chromecas
     let shutdown_writer = oneshot::channel();
     let shutdown_heartbeat = oneshot::channel();
     let shutdown_status = oneshot::channel();
+
+    let connect = Mutex::new(ConnectState::default());
     let cast = Chromecast {
         command: command_tx.clone(),
         shutdown: (shutdown_writer.0, shutdown_heartbeat.0, shutdown_status.0),
         status: status_tx.clone(),
+        connect: connect.clone(),
     };
     let shutdown_rx = (shutdown_writer.1, shutdown_heartbeat.1, shutdown_status.1);
-    let connect_state = Mutex::new(ConnectState::default());
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-        tokio::spawn(reader(source, connect_state.clone(), status_tx.clone(), command_tx.clone()));
+        tokio::spawn(reader(source, connect.clone(), status_tx.clone(), command_tx.clone()));
         let writer = writer(sink, command_rx)
             .select(shutdown_rx.0.map_err(|_| ()))
             .map_err(|_| ())
             .map(|_| ());
         tokio::spawn(writer);
 
-        let heartbeat = heartbeat(command_tx.clone())
+        let heartbeat = worker::heartbeat::task(command_tx.clone())
             .select(shutdown_rx.1.map_err(|_| ()))
             .map_err(|_| ())
             .map(|_| ());
         tokio::spawn(heartbeat);
 
-        let status = status(connect_state.clone(), command_tx.clone())
+        let status = worker::status::task(connect.clone(), command_tx.clone())
             .select(shutdown_rx.2.map_err(|_| ()))
             .map_err(|_| ())
             .map(|_| ());
@@ -166,33 +172,10 @@ fn writer(
         .map_err(|err| warn!("Error on recv: {:?}", err))
 }
 
-fn heartbeat(heartbeat: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
-    Interval::new_interval(Duration::new(5, 0))
-        .map(|_| Command::Heartbeat)
-        .map_err(|_| ())
-        .forward(heartbeat.sink_map_err(|_| ()))
-        .map(|_| ())
-        .map_err(|err| warn!("Error on heartbeat: {:?}", err))
-}
-
-fn status(state: Mutex<ConnectState>, status: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
-    Interval::new_interval(Duration::from_millis(50))
-        .map_err(|_| ())
-        .and_then(move |_| state.lock())
-        .map_err(|_| ())
-        .for_each(move |state| {
-            let _ = status.unbounded_send(Command::ReceiverStatus);
-            if let Some(connect) = state.media_connection() {
-                let _ = status.unbounded_send(Command::MediaStatus(connect.clone()));
-            }
-            Ok(())
-        })
-        .map_err(|err| warn!("Error on status: {:?}", err))
-}
 
 fn read(
     message: ChannelMessage,
-    connect_state: Mutex<ConnectState>,
+    connect: Mutex<ConnectState>,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>
 ) {
@@ -206,7 +189,7 @@ fn read(
                     .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
                 let session = app.map(|app| app.session_id.to_owned());
                 let transport = app.map(|app| app.transport_id.to_owned());
-                let connect = connect_state.lock()
+                let connect = connect.lock()
                     .map(move |mut state| {
                         trace!("Acquired connect state lock in receiver status");
                         state.set_session(session.deref());
@@ -229,26 +212,29 @@ fn read(
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
-                let connect = connect_state.lock()
-                    .map(move |mut state| {
-                        trace!("Acquired connect state lock in media status: {:?}", state.media_connection());
-                        let status = status.into_iter().next();
-                        let media_session = status
-                            .as_ref()
-                            .map(|status| status.media_session_id);
-                        let did_connect = state.set_media_session(media_session.clone());
-                        if let Some(connection) = state.media_connection() {
-                            if did_connect && connection.session.is_some() {
-                                info!("Media session established with session id={:?}", media_session);
-                                let _ = tx.unbounded_send(Status::MediaConnected(connection));
+                let status = status.into_iter().next();
+                let media_session = status
+                    .as_ref()
+                    .map(|status| status.media_session_id);
+                match media_session {
+                    Some(media_session) => {
+                        let tx = tx.clone();
+                        let task = worker::status::register_media_session(connect, media_session, command);
+                        let task = task.map(move |connect| {
+                            if let Some(connect) = connect {
+                                debug!("media session established id={:?}", connect.session);
+                                let _ = tx.unbounded_send(Status::MediaConnected(connect));
                             }
-                            if let Some(status) = status {
-                                let _ = tx.unbounded_send(Status::MediaStatus(status));
-                            }
-                        }
-                        ()
-                    });
-                tokio::spawn(connect);
+                            ()
+                        });
+                        tokio::spawn(task)
+                    },
+                    None =>
+                        tokio::spawn(worker::status::invalidate_media_connection(connect)),
+                };
+                if let Some(status) = status {
+                    let _ = tx.unbounded_send(Status::MediaStatus(status));
+                }
             }
             payload => warn!("Got unknown payload on media channel: {:?}", payload),
         },
