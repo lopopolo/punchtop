@@ -38,16 +38,18 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
+use floating_duration::TimeAsFloat;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
-use backend::PlayerKind;
 
 mod backend;
 mod cast;
 mod playlist;
 
+use backend::PlayerKind;
 use cast::Status;
+use cast::media::PlayerState;
 
 struct Game {
     playlist: playlist::Playlist,
@@ -57,13 +59,14 @@ struct Game {
 }
 
 impl Game {
-    fn load_next(&mut self) -> Option<()> {
+    fn load_next(&mut self) -> Option<u64> {
         let connect = match self.connect {
             Some(ref connect) => connect,
             None => return None,
         };
-        self.playlist.next().map(|track| {
+        self.playlist.next().map(|(cursor, track)| {
             let _ = self.client.load(connect, track);
+            cursor
         })
     }
 
@@ -72,13 +75,20 @@ impl Game {
             let _ = self.client.play(connect);
         };
     }
+
+    fn shutdown(&mut self) {
+        if let Some(ref connect) = self.media_connect {
+            let _ = self.client.stop(connect);
+        }
+        let _ = self.client.shutdown();
+    }
 }
 
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = playlist::Config::new(Duration::new(5, 0), 10, root);
+    let config = playlist::Config::new(Duration::new(20, 0), 10, root);
     let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
@@ -102,6 +112,23 @@ fn main() {
                         game.media_connect = Some(connect.clone());
                         if connect.session.is_none() {
                             game.play();
+                        }
+                    },
+                    Status::MediaStatus(status) => {
+                        let advance = status.current_time > Duration::new(20, 0).as_fractional_secs() &&
+                            game.media_connect.is_some();
+                        if  advance {
+                            info!("Time limit reached. Advancing game");
+                            match game.load_next() {
+                                Some(cursor) => {
+                                    game.media_connect = None;
+                                    info!("Advancing to track {}", cursor);
+                                },
+                                None => {
+                                    warn!("No more tracks. Shutting down");
+                                    game.shutdown();
+                                },
+                            }
                         }
                     },
                     message => warn!("Got unknown message: {:?}", message),

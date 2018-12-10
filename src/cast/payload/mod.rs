@@ -9,7 +9,7 @@ pub mod connection {
 }
 
 pub mod heartbeat {
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {
         Ping,
@@ -37,7 +37,7 @@ pub mod media {
             request_id: i32,
             session_id: String,
             media: MediaInformation,
-            current_time: f32,
+            current_time: f64,
             custom_data: CustomData,
             autoplay: bool,
         },
@@ -64,7 +64,7 @@ pub mod media {
             request_id: i32,
             media_session_id: i32,
             resume_state: Option<ResumeState>,
-            current_time: Option<f32>,
+            current_time: Option<f64>,
             custom_data: CustomData,
         },
         #[serde(rename_all = "camelCase")]
@@ -86,7 +86,7 @@ pub mod media {
         },
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum ResumeState {
         PlaybackStart,
@@ -102,10 +102,10 @@ pub mod media {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub metadata: Option<Metadata>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub duration: Option<f32>,
+        pub duration: Option<f64>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum StreamType {
         None,
@@ -216,14 +216,14 @@ pub mod media {
         pub media_session_id: i32,
         #[serde(default)]
         pub media: Option<MediaInformation>,
-        pub playback_rate: f32,
+        pub playback_rate: f64,
         pub player_state: PlayerState,
         pub idle_reason: Option<IdleReason>,
-        pub current_time: f32,
+        pub current_time: f64,
         pub supported_media_commands: u32,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum PlayerState {
         Idle,
@@ -232,7 +232,7 @@ pub mod media {
         Paused,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum IdleReason {
         Cancelled,
@@ -304,7 +304,7 @@ pub mod receiver {
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Volume {
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub level: Option<f32>,
+        pub level: Option<f64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub muted: Option<bool>,
     }

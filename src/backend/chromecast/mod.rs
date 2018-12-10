@@ -133,15 +133,17 @@ impl Device {
         }
     }
 
-    /*
-    pub fn close(&self) -> backend::Result {
-        if let Some(ref cast) = self.cast {
-            cast.stop();
-            cast.close();
-        }
+    pub fn stop(&self, connect: &cast::MediaConnection) -> backend::Result {
+        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
+        cast.stop(connect);
         Ok(())
     }
-    */
+
+    pub fn shutdown(&mut self) -> backend::Result {
+        let cast = self.cast.take();
+        cast.and_then(|cast| { cast.shutdown(); Some(()) });
+        Ok(())
+    }
 
     pub fn load(&self, connect: &cast::ReceiverConnection, track: Track) -> backend::Result {
         let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;

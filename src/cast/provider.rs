@@ -3,6 +3,8 @@ use std::fmt;
 
 use url::Url;
 
+use super::payload::media::MediaStatus;
+
 #[derive(Clone, Debug)]
 pub struct Media {
     pub title: Option<String>,
@@ -64,6 +66,7 @@ pub enum Command {
     Play(MediaConnection),
     ReceiverStatus,
     Seek(MediaConnection, f32),
+    Shutdown,
     Stop(MediaConnection),
     VolumeLevel(MediaConnection, f32),
     VolumeMute(MediaConnection, bool),
@@ -73,6 +76,7 @@ pub enum Command {
 pub enum Status {
     Connected(ReceiverConnection),
     MediaConnected(MediaConnection),
+    MediaStatus(MediaStatus),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,

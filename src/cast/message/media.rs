@@ -21,7 +21,7 @@ pub fn load(request_id: i32, session_id: &str, transport_id: &str, media: Media)
         request_id,
         session_id: session_id.to_owned(),
         media,
-        current_time: 0f32,
+        current_time: 0f64,
         custom_data: media::CustomData::new(),
         autoplay: true,
     })?;

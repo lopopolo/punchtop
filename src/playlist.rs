@@ -109,7 +109,7 @@ impl Playlist {
 }
 
 impl Iterator for Playlist {
-    type Item = Track;
+    type Item = (u64, Track);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor >= self.config.count {
@@ -122,7 +122,7 @@ impl Iterator for Playlist {
                     path: path.to_path_buf(),
                 };
                 self.tracks.push_back(path);
-                Some(track)
+                Some((self.cursor, track))
             }
             None => None,
         }

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::sync::oneshot;
 use futures::{future, Future, Stream};
 use futures_locks::Mutex;
 use tokio::codec::Framed;
@@ -18,7 +19,7 @@ mod proto;
 mod provider;
 
 use self::codec::CastMessageCodec;
-use self::payload::*;
+pub use self::payload::*;
 pub use self::provider::*;
 
 const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
@@ -34,6 +35,7 @@ pub enum ChannelMessage {
 #[derive(Debug)]
 pub struct Chromecast {
     command: UnboundedSender<Command>,
+    shutdown: (oneshot::Sender<()>, oneshot::Sender<()>, oneshot::Sender<()>),
     status: UnboundedSender<Status>,
 }
 
@@ -62,6 +64,17 @@ impl Chromecast {
 
     pub fn play(&self, connect: &MediaConnection) {
         let _ = self.command.unbounded_send(Command::Play(connect.clone()));
+    }
+
+    pub fn stop(&self, connect: &MediaConnection) {
+        let _ = self.command.unbounded_send(Command::Stop(connect.clone()));
+    }
+
+    pub fn shutdown(mut self) {
+        let _ = self.shutdown.0.send(());
+        let _ = self.shutdown.1.send(());
+        let _ = self.shutdown.2.send(());
+        let _ = self.command.close();
     }
 }
 
@@ -93,18 +106,37 @@ pub fn connect(addr: SocketAddr, rt: &mut tokio::runtime::Runtime) -> (Chromecas
     let (command_tx, command_rx) = unbounded();
     let (status_tx, status_rx) = unbounded();
 
+    let shutdown_writer = oneshot::channel();
+    let shutdown_heartbeat = oneshot::channel();
+    let shutdown_status = oneshot::channel();
     let cast = Chromecast {
         command: command_tx.clone(),
+        shutdown: (shutdown_writer.0, shutdown_heartbeat.0, shutdown_status.0),
         status: status_tx.clone(),
     };
+    let shutdown_rx = (shutdown_writer.1, shutdown_heartbeat.1, shutdown_status.1);
     let connect_state = Mutex::new(ConnectState::default());
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
         tokio::spawn(reader(source, connect_state.clone(), status_tx.clone(), command_tx.clone()));
-        tokio::spawn(writer(sink, command_rx));
-        tokio::spawn(heartbeat(command_tx.clone()));
-        tokio::spawn(status(connect_state.clone(), command_tx.clone()));
+        let writer = writer(sink, command_rx)
+            .select(shutdown_rx.0.map_err(|_| ()))
+            .map_err(|_| ())
+            .map(|_| ());
+        tokio::spawn(writer);
+
+        let heartbeat = heartbeat(command_tx.clone())
+            .select(shutdown_rx.1.map_err(|_| ()))
+            .map_err(|_| ())
+            .map(|_| ());
+        tokio::spawn(heartbeat);
+
+        let status = status(connect_state.clone(), command_tx.clone())
+            .select(shutdown_rx.2.map_err(|_| ()))
+            .map_err(|_| ())
+            .map(|_| ());
+        tokio::spawn(status);
     });
     rt.spawn(init.map_err(|_| ()));
     (cast, status_rx)
@@ -197,15 +229,21 @@ fn read(
         },
         ChannelMessage::Media(message) => match message {
             media::Payload::MediaStatus { status, .. } => {
-                let media_session = status.first().map(|status| status.media_session_id);
                 let connect = connect_state.lock()
                     .map(move |mut state| {
                         trace!("Acquired connect state lock in media status: {:?}", state.media_connection());
-                        let did_connect = state.set_media_session(media_session);
+                        let status = status.into_iter().next();
+                        let media_session = status
+                            .as_ref()
+                            .map(|status| status.media_session_id);
+                        let did_connect = state.set_media_session(media_session.clone());
                         if let Some(connection) = state.media_connection() {
                             if did_connect && connection.session.is_some() {
                                 info!("Media session established with session id={:?}", media_session);
                                 let _ = tx.unbounded_send(Status::MediaConnected(connection));
+                            }
+                            if let Some(status) = status {
+                                let _ = tx.unbounded_send(Status::MediaStatus(status));
                             }
                         }
                         ()
