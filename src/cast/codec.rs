@@ -58,7 +58,7 @@ impl Encoder for CastMessageCodec {
             Command::Connect(connect) => message::connection::connect(&connect.transport),
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(req_id, &app_id),
-            Command::Load { connect, media } => message::media::load(req_id, &connect, media),
+            Command::Load { connect, media } => message::media::load(req_id, &connect, *media),
             Command::MediaStatus(connect) => message::media::status(req_id, &connect),
             Command::Play(ref connect) => message::media::play(req_id, &connect),
             Command::ReceiverStatus => message::receiver::status(req_id),
@@ -139,24 +139,28 @@ impl Decoder for CastMessageCodec {
                     namespace::CONNECTION => {
                         serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(Box::new)
                             .map(ChannelMessage::Connection)
                             .map(Some)
                     }
                     namespace::HEARTBEAT => {
                         serde_json::from_str::<heartbeat::Payload>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(Box::new)
                             .map(ChannelMessage::Heartbeat)
                             .map(Some)
                     }
                     namespace::MEDIA => {
                         serde_json::from_str::<media::Payload>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(Box::new)
                             .map(ChannelMessage::Media)
                             .map(Some)
                     }
                     namespace::RECEIVER => {
                         serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(Box::new)
                             .map(ChannelMessage::Receiver)
                             .map(Some)
                     }

@@ -25,10 +25,10 @@ const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
 
 #[derive(Debug)]
 pub enum ChannelMessage {
-    Connection(connection::Payload),
-    Heartbeat(heartbeat::Payload),
-    Media(media::Payload),
-    Receiver(receiver::Payload),
+    Connection(Box<connection::Payload>),
+    Heartbeat(Box<heartbeat::Payload>),
+    Media(Box<media::Payload>),
+    Receiver(Box<receiver::Payload>),
 }
 
 #[derive(Debug)]
@@ -62,7 +62,10 @@ impl Chromecast {
         let connect = connect.clone();
         let task = worker::status::invalidate_media_connection(self.connect.clone());
         let task = task.map(move |_| {
-            let _ = command.unbounded_send(Command::Load { connect, media });
+            let _ = command.unbounded_send(Command::Load {
+                connect,
+                media: Box::new(media),
+            });
         });
         tokio::spawn(task);
     }
@@ -165,12 +168,13 @@ fn reader(
 ) -> impl Future<Item = (), Error = ()> {
     source
         .for_each(move |message| {
-            Ok(read(
+            read(
                 message,
                 connect_state.clone(),
                 status.clone(),
                 command.clone(),
-            ))
+            );
+            Ok(())
         })
         .map(|_| ())
         .map_err(|err| warn!("Error on send: {:?}", err))
@@ -194,7 +198,7 @@ fn read(
 ) {
     match message {
         ChannelMessage::Heartbeat(_) => trace!("Got heartbeat"),
-        ChannelMessage::Receiver(message) => match message {
+        ChannelMessage::Receiver(message) => match *message {
             receiver::Payload::ReceiverStatus { status, .. } => {
                 let app = status
                     .applications
@@ -210,18 +214,17 @@ fn read(
                         && state.set_transport(transport.deref());
                     if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
                         debug!("Connecting to transport {}", connect.transport);
-                        let _ = tx.unbounded_send(Status::Connected(connect.clone()));
+                        let _ = tx.unbounded_send(Status::Connected(Box::new(connect.clone())));
                         // we've connected to the default receiver. Now connect to
                         // the transport backing the launched app session.
                         let _ = command.unbounded_send(Command::Connect(connect.clone()));
                     }
-                    ()
                 });
                 tokio::spawn(connect);
             }
             payload => warn!("Got unknown payload on receiver channel: {:?}", payload),
         },
-        ChannelMessage::Media(message) => match message {
+        ChannelMessage::Media(message) => match *message {
             media::Payload::MediaStatus { status, .. } => {
                 let status = status.into_iter().next();
                 let media_session = status.as_ref().map(|status| status.media_session_id);
@@ -231,16 +234,16 @@ fn read(
                         let task = worker::status::register_media_session(connect, media_session);
                         let task = task.map(move |connect| {
                             if let Some(connect) = connect {
-                                let _ = tx.unbounded_send(Status::MediaConnected(connect));
+                                let _ =
+                                    tx.unbounded_send(Status::MediaConnected(Box::new(connect)));
                             }
-                            ()
                         });
                         tokio::spawn(task)
                     }
                     None => tokio::spawn(worker::status::invalidate_media_connection(connect)),
                 };
                 if let Some(status) = status {
-                    let _ = tx.unbounded_send(Status::MediaStatus(status));
+                    let _ = tx.unbounded_send(Status::MediaStatus(Box::new(status)));
                 }
             }
             payload => warn!("Got unknown payload on media channel: {:?}", payload),

@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 pub mod connection {
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
@@ -200,16 +202,10 @@ pub mod media {
         pub height: Option<u32>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Default)]
     pub struct CustomData {
         #[serde(skip_serializing)]
         private: (),
-    }
-
-    impl CustomData {
-        pub fn new() -> CustomData {
-            CustomData { private: () }
-        }
     }
 
     #[derive(Serialize, Deserialize, Debug)]

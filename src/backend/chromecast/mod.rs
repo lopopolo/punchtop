@@ -155,11 +155,11 @@ impl Device {
         let track = CastTrack {
             root: self.game_config.root(),
             server: addr,
-            track: track,
+            track,
         };
         let media = track
             .metadata()
-            .ok_or(Error::CannotLoadMedia(track.track))?;
+            .ok_or_else(|| Error::CannotLoadMedia(track.track))?;
         cast.load(connect, media);
         Ok(())
     }

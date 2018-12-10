@@ -102,11 +102,11 @@ fn main() {
             .for_each(move |message| {
                 match message {
                     Status::Connected(connect) => {
-                        game.connect = Some(connect);
+                        game.connect = Some(*connect);
                         game.load_next();
                     }
                     Status::MediaConnected(connect) => {
-                        game.media_connect = Some(connect.clone());
+                        game.media_connect = Some(*connect);
                         game.play();
                     }
                     Status::MediaStatus(status) => {

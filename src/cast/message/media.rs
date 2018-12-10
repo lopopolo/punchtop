@@ -11,22 +11,19 @@ pub fn load(
     connect: &ReceiverConnection,
     media: Media,
 ) -> Result<CastMessage, Error> {
-    let media = {
-        let config = media::MediaInformation {
-            content_id: media.url.to_string(),
-            stream_type: media::StreamType::None,
-            content_type: media.content_type,
-            metadata: None,
-            duration: None,
-        };
-        config
+    let media = media::MediaInformation {
+        content_id: media.url.to_string(),
+        stream_type: media::StreamType::None,
+        content_type: media.content_type,
+        metadata: None,
+        duration: None,
     };
     let payload = to_string(&media::Payload::Load {
         request_id,
         session_id: connect.session.to_owned(),
         media,
         current_time: 0f64,
-        custom_data: media::CustomData::new(),
+        custom_data: media::CustomData::default(),
         autoplay: true,
     })?;
     Ok(message(&connect.transport, payload))
@@ -36,7 +33,7 @@ pub fn play(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, E
     let payload = to_string(&media::Payload::Play {
         request_id,
         media_session_id: connect.session,
-        custom_data: media::CustomData::new(),
+        custom_data: media::CustomData::default(),
     })?;
     Ok(message(&connect.receiver.transport, payload))
 }
@@ -53,7 +50,7 @@ pub fn stop(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, E
     let payload = serde_json::to_string(&media::Payload::Stop {
         request_id,
         media_session_id: connect.session,
-        custom_data: media::CustomData::new(),
+        custom_data: media::CustomData::default(),
     })?;
     Ok(message(&connect.receiver.transport, payload))
 }

@@ -64,7 +64,7 @@ pub enum Command {
     },
     Load {
         connect: ReceiverConnection,
-        media: Media,
+        media: Box<Media>,
     },
     MediaStatus(MediaConnection),
     Pause(MediaConnection),
@@ -79,9 +79,9 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum Status {
-    Connected(ReceiverConnection),
-    MediaConnected(MediaConnection),
-    MediaStatus(MediaStatus),
+    Connected(Box<ReceiverConnection>),
+    MediaConnected(Box<MediaConnection>),
+    MediaStatus(Box<MediaStatus>),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,
