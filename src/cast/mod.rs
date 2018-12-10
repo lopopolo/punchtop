@@ -21,7 +21,7 @@ use self::codec::CastMessageCodec;
 pub use self::payload::*;
 pub use self::provider::*;
 
-const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
+pub const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
 
 #[derive(Debug)]
 pub enum ChannelMessage {
@@ -132,12 +132,13 @@ pub fn connect(
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
-        tokio::spawn(reader(
+        let read = worker::read::task(
             source,
             connect.clone(),
             status_tx.clone(),
             command_tx.clone(),
-        ));
+        );
+        tokio::spawn(read);
         let writer = writer(sink, command_rx)
             .select(shutdown_rx.0.map_err(|_| ()))
             .map_err(|_| ())
@@ -160,26 +161,6 @@ pub fn connect(
     (cast, status_rx)
 }
 
-fn reader(
-    source: impl Stream<Item = ChannelMessage, Error = io::Error>,
-    connect_state: Mutex<ConnectState>,
-    status: UnboundedSender<Status>,
-    command: UnboundedSender<Command>,
-) -> impl Future<Item = (), Error = ()> {
-    source
-        .for_each(move |message| {
-            read(
-                message,
-                connect_state.clone(),
-                status.clone(),
-                command.clone(),
-            );
-            Ok(())
-        })
-        .map(|_| ())
-        .map_err(|err| warn!("Error on send: {:?}", err))
-}
-
 fn writer(
     sink: impl Sink<SinkItem = Command, SinkError = io::Error>,
     command: UnboundedReceiver<Command>,
@@ -188,66 +169,4 @@ fn writer(
         .forward(sink.sink_map_err(|_| ()))
         .map(|_| ())
         .map_err(|err| warn!("Error on recv: {:?}", err))
-}
-
-fn read(
-    message: ChannelMessage,
-    connect: Mutex<ConnectState>,
-    tx: UnboundedSender<Status>,
-    command: UnboundedSender<Command>,
-) {
-    match message {
-        ChannelMessage::Heartbeat(_) => trace!("Got heartbeat"),
-        ChannelMessage::Receiver(message) => match *message {
-            receiver::Payload::ReceiverStatus { status, .. } => {
-                let app = status
-                    .applications
-                    .iter()
-                    .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
-                let session = app.map(|app| app.session_id.to_owned());
-                let transport = app.map(|app| app.transport_id.to_owned());
-                let connect = connect.lock().map(move |mut state| {
-                    trace!("Acquired connect state lock in receiver status");
-                    state.set_session(session.deref());
-                    let did_connect = session.is_some()
-                        && transport.is_some()
-                        && state.set_transport(transport.deref());
-                    if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
-                        debug!("Connecting to transport {}", connect.transport);
-                        let _ = tx.unbounded_send(Status::Connected(Box::new(connect.clone())));
-                        // we've connected to the default receiver. Now connect to
-                        // the transport backing the launched app session.
-                        let _ = command.unbounded_send(Command::Connect(connect.clone()));
-                    }
-                });
-                tokio::spawn(connect);
-            }
-            payload => warn!("Got unknown payload on receiver channel: {:?}", payload),
-        },
-        ChannelMessage::Media(message) => match *message {
-            media::Payload::MediaStatus { status, .. } => {
-                let status = status.into_iter().next();
-                let media_session = status.as_ref().map(|status| status.media_session_id);
-                match media_session {
-                    Some(media_session) => {
-                        let tx = tx.clone();
-                        let task = worker::status::register_media_session(connect, media_session);
-                        let task = task.map(move |connect| {
-                            if let Some(connect) = connect {
-                                let _ =
-                                    tx.unbounded_send(Status::MediaConnected(Box::new(connect)));
-                            }
-                        });
-                        tokio::spawn(task)
-                    }
-                    None => tokio::spawn(worker::status::invalidate_media_connection(connect)),
-                };
-                if let Some(status) = status {
-                    let _ = tx.unbounded_send(Status::MediaStatus(Box::new(status)));
-                }
-            }
-            payload => warn!("Got unknown payload on media channel: {:?}", payload),
-        },
-        payload => warn!("Got unknown payload: {:?}", payload),
-    }
 }
