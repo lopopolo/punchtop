@@ -83,11 +83,23 @@ pub enum Status {
     InvalidRequest,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum SessionLifecycle {
+    Init,
+    Established,
+    NoMediaSession,
+}
+
+impl Default for SessionLifecycle {
+    fn default() -> SessionLifecycle { SessionLifecycle::Init }
+}
+
 #[derive(Debug, Default)]
 pub struct ConnectState {
     session: Option<String>,
     transport: Option<String>,
     media_session: Option<i32>,
+    pub lifecycle: SessionLifecycle,
 }
 
 impl ConnectState {
@@ -102,11 +114,15 @@ impl ConnectState {
     }
 
     pub fn media_connection(&self) -> Option<MediaConnection> {
-        self.receiver_connection()
-            .map(|receiver| MediaConnection {
-                receiver,
-                session: self.media_session,
-            })
+        match self.lifecycle {
+            SessionLifecycle::Init => None,
+            SessionLifecycle::Established => self.receiver_connection()
+                .map(|receiver| MediaConnection {
+                    receiver,
+                    session: self.media_session,
+                }),
+            SessionLifecycle::NoMediaSession => None,
+        }
     }
 
     pub fn set_session(&mut self, session: Option<&str>) -> bool {

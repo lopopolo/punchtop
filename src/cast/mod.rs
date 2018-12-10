@@ -196,13 +196,12 @@ fn read(
                         let did_connect = session.is_some() &&
                             transport.is_some() &&
                             state.set_transport(transport.deref());
-                        if let (Some(ref connect), true) = (state.media_connection(), did_connect) {
-                            debug!("Connecting to transport {}", connect.receiver.transport);
-                            let _ = tx.unbounded_send(Status::Connected(connect.receiver.clone()));
+                        if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
+                            debug!("Connecting to transport {}", connect.transport);
+                            let _ = tx.unbounded_send(Status::Connected(connect.clone()));
                             // we've connected to the default receiver. Now connect to
                             // the transport backing the launched app session.
-                            let _ = command.unbounded_send(Command::Connect(connect.receiver.clone()));
-                            let _ = command.unbounded_send(Command::MediaStatus(connect.clone()));
+                            let _ = command.unbounded_send(Command::Connect(connect.clone()));
                         }
                         ()
                     });
@@ -219,10 +218,9 @@ fn read(
                 match media_session {
                     Some(media_session) => {
                         let tx = tx.clone();
-                        let task = worker::status::register_media_session(connect, media_session, command);
+                        let task = worker::status::register_media_session(connect, media_session);
                         let task = task.map(move |connect| {
                             if let Some(connect) = connect {
-                                debug!("media session established id={:?}", connect.session);
                                 let _ = tx.unbounded_send(Status::MediaConnected(connect));
                             }
                             ()
