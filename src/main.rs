@@ -42,14 +42,13 @@ use floating_duration::TimeAsFloat;
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
-
 mod backend;
 mod cast;
 mod playlist;
 
 use backend::PlayerKind;
-use cast::Status;
 use cast::media::PlayerState;
+use cast::Status;
 
 struct Game {
     playlist: playlist::Playlist,
@@ -107,30 +106,31 @@ fn main() {
                     Status::Connected(connect) => {
                         game.connect = Some(connect);
                         game.load_next();
-                    },
+                    }
                     Status::MediaConnected(connect) => {
                         game.media_connect = Some(connect.clone());
                         if connect.session.is_none() {
                             game.play();
                         }
-                    },
+                    }
                     Status::MediaStatus(status) => {
-                        let advance = status.current_time > Duration::new(20, 0).as_fractional_secs() &&
-                            game.media_connect.is_some();
-                        if  advance {
+                        let advance = status.current_time
+                            > Duration::new(20, 0).as_fractional_secs()
+                            && game.media_connect.is_some();
+                        if advance {
                             info!("Time limit reached. Advancing game");
                             match game.load_next() {
                                 Some(cursor) => {
                                     game.media_connect = None;
                                     info!("Advancing to track {}", cursor);
-                                },
+                                }
                                 None => {
                                     warn!("No more tracks. Shutting down");
                                     game.shutdown();
-                                },
+                                }
                             }
                         }
-                    },
+                    }
                     message => warn!("Got unknown message: {:?}", message),
                 };
                 Ok(())

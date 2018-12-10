@@ -141,7 +141,9 @@ impl Device {
 
     pub fn shutdown(&mut self) -> backend::Result {
         let cast = self.cast.take();
-        cast.and_then(|cast| { cast.shutdown(); Some(()) });
+        if let Some(cast) = cast {
+            cast.shutdown();
+        }
         Ok(())
     }
 

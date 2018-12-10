@@ -14,4 +14,3 @@ pub fn task(command: UnboundedSender<Command>) -> impl Future<Item = (), Error =
         .map(|_| ())
         .map_err(|err| warn!("Error on heartbeat: {:?}", err))
 }
-

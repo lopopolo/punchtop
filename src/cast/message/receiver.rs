@@ -14,7 +14,11 @@ pub fn launch(request_id: i32, app_id: &str) -> Result<CastMessage, Error> {
 }
 
 // TODO: this belongs on the media channel
-pub fn stop(request_id: i32, transport: &str, media_session_id: &str) -> Result<CastMessage, Error> {
+pub fn stop(
+    request_id: i32,
+    transport: &str,
+    media_session_id: &str,
+) -> Result<CastMessage, Error> {
     let payload = serde_json::to_string(&receiver::Payload::Stop {
         request_id,
         session_id: media_session_id.to_owned(),

@@ -5,11 +5,11 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use tokio::codec::{Decoder, Encoder};
 
-use super::{message, ChannelMessage};
 use super::message::namespace;
 use super::payload::*;
 use super::proto::CastMessage;
 use super::provider::*;
+use super::{message, ChannelMessage};
 
 const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
 
@@ -50,18 +50,25 @@ impl Encoder for CastMessageCodec {
         let encode_counter = self.encoded_frames.fetch_add(1usize, Ordering::SeqCst);
         trace!(
             "CastMessageCodec stream=encode frame-counter={} command={:?}",
-            encode_counter, item
+            encode_counter,
+            item
         );
         let message = match item {
             Command::Close(connect) => message::connection::close(&connect.transport),
             Command::Connect(connect) => message::connection::connect(&connect.transport),
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(req_id, &app_id),
-            Command::Load { connect, media } =>
-                message::media::load(req_id, &connect.session, &connect.transport, media),
-            Command::MediaStatus(connect) => message::media::status(req_id, &connect.receiver.transport, connect.session),
-            Command::Play(ref connect) if connect.session.is_some() =>
-                message::media::play(req_id, &connect.receiver.transport, connect.session.unwrap()),
+            Command::Load { connect, media } => {
+                message::media::load(req_id, &connect.session, &connect.transport, media)
+            }
+            Command::MediaStatus(connect) => {
+                message::media::status(req_id, &connect.receiver.transport, connect.session)
+            }
+            Command::Play(ref connect) if connect.session.is_some() => message::media::play(
+                req_id,
+                &connect.receiver.transport,
+                connect.session.unwrap(),
+            ),
             Command::ReceiverStatus => message::receiver::status(req_id),
             _ => unimplemented!(),
         };
@@ -69,7 +76,10 @@ impl Encoder for CastMessageCodec {
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
         message::encode(message, &mut buf)
-            .map_err(|err| {warn!("encode err: {:?}", err); err})
+            .map_err(|err| {
+                warn!("encode err: {:?}", err);
+                err
+            })
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
@@ -128,7 +138,10 @@ impl Decoder for CastMessageCodec {
                 src.reserve(CAST_MESSAGE_HEADER_LENGTH);
                 let message = protobuf::parse_from_bytes::<CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-                trace!("decoded message with namespace: {}", message.get_namespace());
+                trace!(
+                    "decoded message with namespace: {}",
+                    message.get_namespace()
+                );
                 match message.get_namespace() {
                     namespace::CONNECTION => {
                         serde_json::from_str::<connection::Payload>(message.get_payload_utf8())
@@ -142,10 +155,12 @@ impl Decoder for CastMessageCodec {
                             .map(ChannelMessage::Heartbeat)
                             .map(Some)
                     }
-                    namespace::MEDIA => serde_json::from_str::<media::Payload>(message.get_payload_utf8())
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                        .map(ChannelMessage::Media)
-                        .map(Some),
+                    namespace::MEDIA => {
+                        serde_json::from_str::<media::Payload>(message.get_payload_utf8())
+                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+                            .map(ChannelMessage::Media)
+                            .map(Some)
+                    }
                     namespace::RECEIVER => {
                         serde_json::from_str::<receiver::Payload>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
@@ -166,7 +181,8 @@ impl Decoder for CastMessageCodec {
         let decode_counter = self.decoded_frames.fetch_add(1usize, Ordering::SeqCst);
         trace!(
             "CastMessageCodec stream=decode frame-counter={} message={:?}",
-            decode_counter, message
+            decode_counter,
+            message
         );
         message
     }

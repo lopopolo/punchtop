@@ -6,7 +6,7 @@ use futures::Future;
 use futures_locks::Mutex;
 use tokio::timer::Interval;
 
-use cast::{ConnectState, Command, MediaConnection, SessionLifecycle};
+use cast::{Command, ConnectState, MediaConnection, SessionLifecycle};
 
 pub fn task(
     state: Mutex<ConnectState>,
@@ -33,8 +33,9 @@ pub fn register_media_session(
     state: Mutex<ConnectState>,
     session: i32,
 ) -> impl Future<Item = Option<MediaConnection>, Error = ()> {
-   state.lock()
-       .map(move |mut state| {
+    state
+        .lock()
+        .map(move |mut state| {
             if state.set_media_session(Some(session)) {
                 debug!("media session established: {}", session);
                 state.lifecycle = SessionLifecycle::Established;
@@ -42,8 +43,8 @@ pub fn register_media_session(
             } else {
                 None
             }
-       })
-       .map_err(|_| ())
+        })
+        .map_err(|_| ())
 }
 
 /// Invalidate a media session id. This prevents the `task` from polling for
@@ -52,7 +53,8 @@ pub fn register_media_session(
 pub fn invalidate_media_connection(
     state: Mutex<ConnectState>,
 ) -> impl Future<Item = (), Error = ()> {
-   state.lock()
+    state
+        .lock()
         .map(|mut state| {
             debug!("media session invalidated");
             state.lifecycle = SessionLifecycle::NoMediaSession;

@@ -59,8 +59,13 @@ pub enum Command {
     Close(ReceiverConnection),
     Connect(ReceiverConnection),
     Heartbeat,
-    Launch { app_id: String },
-    Load { connect: ReceiverConnection, media: Media },
+    Launch {
+        app_id: String,
+    },
+    Load {
+        connect: ReceiverConnection,
+        media: Media,
+    },
     MediaStatus(MediaConnection),
     Pause(MediaConnection),
     Play(MediaConnection),
@@ -91,7 +96,9 @@ pub enum SessionLifecycle {
 }
 
 impl Default for SessionLifecycle {
-    fn default() -> SessionLifecycle { SessionLifecycle::Init }
+    fn default() -> SessionLifecycle {
+        SessionLifecycle::Init
+    }
 }
 
 #[derive(Debug, Default)]
@@ -116,11 +123,12 @@ impl ConnectState {
     pub fn media_connection(&self) -> Option<MediaConnection> {
         match self.lifecycle {
             SessionLifecycle::Init => None,
-            SessionLifecycle::Established => self.receiver_connection()
-                .map(|receiver| MediaConnection {
+            SessionLifecycle::Established => {
+                self.receiver_connection().map(|receiver| MediaConnection {
                     receiver,
                     session: self.media_session,
-                }),
+                })
+            }
             SessionLifecycle::NoMediaSession => None,
         }
     }

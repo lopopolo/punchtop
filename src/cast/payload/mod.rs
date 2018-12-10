@@ -3,7 +3,9 @@ pub mod connection {
     #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Payload {
         #[serde(rename_all = "camelCase")]
-        Connect { user_agent: String },
+        Connect {
+            user_agent: String,
+        },
         Close,
     }
 }
