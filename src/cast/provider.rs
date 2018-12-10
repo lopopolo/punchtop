@@ -124,10 +124,10 @@ impl ConnectState {
         match self.lifecycle {
             SessionLifecycle::Init => None,
             SessionLifecycle::Established => {
-                self.receiver_connection().map(|receiver| MediaConnection {
-                    receiver,
-                    session: self.media_session,
-                })
+                match (self.receiver_connection(), self.media_session) {
+                    (Some(receiver), Some(session)) => Some(MediaConnection { receiver, session }),
+                    _ => None,
+                }
             }
             SessionLifecycle::NoMediaSession => None,
         }
@@ -170,5 +170,5 @@ pub struct ReceiverConnection {
 #[derive(Clone, Debug)]
 pub struct MediaConnection {
     pub receiver: ReceiverConnection,
-    pub session: Option<i32>,
+    pub session: i32,
 }

@@ -87,7 +87,7 @@ fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = playlist::Config::new(Duration::new(20, 0), 10, root);
+    let config = playlist::Config::new(Duration::new(5, 0), 1, root);
     let player = backend::chromecast::devices(config.clone())
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
@@ -109,13 +109,11 @@ fn main() {
                     }
                     Status::MediaConnected(connect) => {
                         game.media_connect = Some(connect.clone());
-                        if connect.session.is_none() {
-                            game.play();
-                        }
+                        game.play();
                     }
                     Status::MediaStatus(status) => {
                         let advance = status.current_time
-                            > Duration::new(20, 0).as_fractional_secs()
+                            > Duration::new(5, 0).as_fractional_secs()
                             && game.media_connect.is_some();
                         if advance {
                             info!("Time limit reached. Advancing game");
@@ -137,7 +135,6 @@ fn main() {
             })
             .into_future();
         rt.spawn(play_loop);
-        thread::sleep(Duration::new(30, 0));
     }
     rt.shutdown_on_idle().wait().unwrap();
 }

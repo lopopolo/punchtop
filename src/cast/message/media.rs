@@ -1,15 +1,14 @@
 use serde_json::{to_string, Error};
 
-use super::super::payload::*;
-use super::super::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
-use super::super::provider::Media;
+use cast::payload::*;
+use cast::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
+use cast::provider::{Media, MediaConnection, ReceiverConnection};
 
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
 pub fn load(
     request_id: i32,
-    session_id: &str,
-    transport_id: &str,
+    connect: &ReceiverConnection,
     media: Media,
 ) -> Result<CastMessage, Error> {
     let media = {
@@ -24,38 +23,39 @@ pub fn load(
     };
     let payload = to_string(&media::Payload::Load {
         request_id,
-        session_id: session_id.to_owned(),
+        session_id: connect.session.to_owned(),
         media,
         current_time: 0f64,
         custom_data: media::CustomData::new(),
         autoplay: true,
     })?;
-    Ok(message(transport_id, payload))
+    Ok(message(&connect.transport, payload))
 }
 
-pub fn play(
-    request_id: i32,
-    transport_id: &str,
-    media_session_id: i32,
-) -> Result<CastMessage, Error> {
+pub fn play(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = to_string(&media::Payload::Play {
         request_id,
-        media_session_id: media_session_id,
+        media_session_id: connect.session,
         custom_data: media::CustomData::new(),
     })?;
-    Ok(message(transport_id, payload))
+    Ok(message(&connect.receiver.transport, payload))
 }
 
-pub fn status(
-    request_id: i32,
-    transport_id: &str,
-    media_session_id: Option<i32>,
-) -> Result<CastMessage, Error> {
+pub fn status(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = to_string(&media::Payload::GetStatus {
         request_id,
-        media_session_id: media_session_id,
+        media_session_id: Some(connect.session),
     })?;
-    Ok(message(transport_id, payload))
+    Ok(message(&connect.receiver.transport, payload))
+}
+
+pub fn stop(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
+    let payload = serde_json::to_string(&media::Payload::Stop {
+        request_id,
+        media_session_id: connect.session,
+        custom_data: media::CustomData::new(),
+    })?;
+    Ok(message(&connect.receiver.transport, payload))
 }
 
 fn message(transport_id: &str, payload: String) -> CastMessage {

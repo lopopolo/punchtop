@@ -58,18 +58,11 @@ impl Encoder for CastMessageCodec {
             Command::Connect(connect) => message::connection::connect(&connect.transport),
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(req_id, &app_id),
-            Command::Load { connect, media } => {
-                message::media::load(req_id, &connect.session, &connect.transport, media)
-            }
-            Command::MediaStatus(connect) => {
-                message::media::status(req_id, &connect.receiver.transport, connect.session)
-            }
-            Command::Play(ref connect) if connect.session.is_some() => message::media::play(
-                req_id,
-                &connect.receiver.transport,
-                connect.session.unwrap(),
-            ),
+            Command::Load { connect, media } => message::media::load(req_id, &connect, media),
+            Command::MediaStatus(connect) => message::media::status(req_id, &connect),
+            Command::Play(ref connect) => message::media::play(req_id, &connect),
             Command::ReceiverStatus => message::receiver::status(req_id),
+            Command::Stop(ref connect) => message::media::stop(req_id, connect),
             _ => unimplemented!(),
         };
 
