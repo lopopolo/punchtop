@@ -1,23 +1,62 @@
 use std::collections::VecDeque;
-use std::ffi::OsStr;
+use std::fs::File;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
+use floating_duration::TimeAsFloat;
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
-fn direntry_to_extension(entry: &DirEntry) -> Option<&str> {
-    Path::new(entry.path()).extension().and_then(OsStr::to_str)
+// https://developers.google.com/cast/docs/media#audio_codecs
+fn is_audio_media(path: &Path) -> bool {
+    let mime: &str = &tree_magic::from_filepath(path);
+    match mime {
+        "audio/mpeg" | "audio/mp3" => true,
+        "audio/aac" | "audio/mp4" => true,
+        "audio/flac" => true,
+        "audio/ogg" | "application/ogg" => true,
+        "audio/webm" => true,
+        _ => false,
+    }
 }
 
-fn is_music(entry: &DirEntry) -> bool {
-    match direntry_to_extension(entry) {
-        Some(ext) if ext == "mp3" => true,
-        Some(ext) if ext == "m4a" => true,
+fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
+    let mime: &str = &tree_magic::from_filepath(path);
+    match mime {
+        "audio/mpeg" | "audio/mp3" => mp3_duration::from_path(path)
+            .ok()
+            .and_then(|duration| duration.checked_sub(required_duration))
+            .is_some(),
+        "audio/aac" | "audio/mp4" => {
+            let mut fd = match File::open(path) {
+                Ok(fd) => fd,
+                Err(_) => return false,
+            };
+            let mut buf = Vec::new();
+            if fd.read_to_end(&mut buf).is_err() {
+                return false;
+            }
+            let mut c = Cursor::new(&buf);
+            let mut context = mp4::MediaContext::new();
+            if mp4::read_mp4(&mut c, &mut context).is_err() {
+                return false;
+            }
+            let mut valid = true;
+            for track in context.tracks {
+                let mut track_valid = false;
+                if let (Some(duration), Some(timescale)) = (track.duration, track.timescale) {
+                    let duration = duration.0 as f64 / timescale.0 as f64;
+                    track_valid = duration >= required_duration.as_fractional_secs();
+                }
+                valid = valid && track_valid;
+            }
+            valid
+        }
         _ => false,
     }
 }
@@ -80,19 +119,12 @@ pub struct Playlist {
 impl Playlist {
     pub fn from_directory(config: &Config) -> Self {
         let mut vec = Vec::new();
-        let track_duration = config.duration;
         let walker = WalkDir::new(config.root())
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
-            .filter(is_music)
-            .filter(|e| match direntry_to_extension(e) {
-                Some("mp3") => mp3_duration::from_path(e.path())
-                    .ok()
-                    .and_then(|duration| duration.checked_sub(track_duration))
-                    .is_some(),
-                _ => true,
-            });
+            .filter(|e| is_audio_media(e.path()))
+            .filter(|e| is_sufficient_duration(e.path(), config.duration));
         for entry in walker {
             vec.push(PathBuf::from(entry.path()));
         }
