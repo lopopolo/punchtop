@@ -50,8 +50,10 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
             for track in context.tracks {
                 let mut track_valid = false;
                 if let (Some(duration), Some(timescale)) = (track.duration, track.timescale) {
-                    let duration = duration.0 as f64 / timescale.0 as f64;
-                    track_valid = duration >= required_duration.as_fractional_secs();
+                    if timescale.0 > 0 {
+                        let duration = duration.0 as f64 / timescale.0 as f64;
+                        track_valid = duration >= required_duration.as_fractional_secs();
+                    }
                 }
                 valid = valid && track_valid;
             }
