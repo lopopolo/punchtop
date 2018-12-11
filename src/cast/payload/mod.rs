@@ -32,13 +32,13 @@ pub mod media {
     pub enum Payload {
         #[serde(rename_all = "camelCase")]
         GetStatus {
-            request_id: i32,
+            request_id: i64,
             #[serde(skip_serializing_if = "Option::is_none")]
-            media_session_id: Option<i32>,
+            media_session_id: Option<i64>,
         },
         #[serde(rename_all = "camelCase")]
         Load {
-            request_id: i32,
+            request_id: i64,
             session_id: String,
             media: MediaInformation,
             current_time: f64,
@@ -47,26 +47,26 @@ pub mod media {
         },
         #[serde(rename_all = "camelCase")]
         Play {
-            request_id: i32,
-            media_session_id: i32,
+            request_id: i64,
+            media_session_id: i64,
             custom_data: CustomData,
         },
         #[serde(rename_all = "camelCase")]
         Pause {
-            request_id: i32,
-            media_session_id: i32,
+            request_id: i64,
+            media_session_id: i64,
             custom_data: CustomData,
         },
         #[serde(rename_all = "camelCase")]
         Stop {
-            request_id: i32,
-            media_session_id: i32,
+            request_id: i64,
+            media_session_id: i64,
             custom_data: CustomData,
         },
         #[serde(rename_all = "camelCase")]
         Seek {
-            request_id: i32,
-            media_session_id: i32,
+            request_id: i64,
+            media_session_id: i64,
             resume_state: Option<ResumeState>,
             current_time: Option<f64>,
             custom_data: CustomData,
@@ -74,18 +74,18 @@ pub mod media {
         #[serde(rename_all = "camelCase")]
         MediaStatus {
             #[serde(default)]
-            request_id: i32,
+            request_id: i64,
             status: Vec<MediaStatus>,
         },
         #[serde(rename_all = "camelCase")]
-        LoadCancelled { request_id: i32 },
+        LoadCancelled { request_id: i64 },
         #[serde(rename_all = "camelCase")]
-        LoadFailed { request_id: i32 },
+        LoadFailed { request_id: i64 },
         #[serde(rename_all = "camelCase")]
-        InvalidPlayerState { request_id: i32 },
+        InvalidPlayerState { request_id: i64 },
         #[serde(rename_all = "camelCase")]
         InvalidRequest {
-            request_id: i32,
+            request_id: i64,
             reason: Option<String>,
         },
     }
@@ -211,7 +211,7 @@ pub mod media {
     #[derive(Serialize, Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
     pub struct MediaStatus {
-        pub media_session_id: i32,
+        pub media_session_id: i64,
         #[serde(default)]
         pub media: Option<MediaInformation>,
         pub playback_rate: f64,
@@ -246,26 +246,26 @@ pub mod receiver {
     pub enum Payload {
         #[serde(rename_all = "camelCase")]
         Launch {
-            request_id: i32,
+            request_id: i64,
             app_id: String,
         },
         #[serde(rename_all = "camelCase")]
         Stop {
-            request_id: i32,
+            request_id: i64,
             session_id: String,
         },
         #[serde(rename_all = "camelCase")]
         GetStatus {
-            request_id: i32,
+            request_id: i64,
         },
         #[serde(rename_all = "camelCase")]
         GetAppAvailability {
-            request_id: i32,
+            request_id: i64,
             app_id: Vec<String>,
         },
         #[serde(rename_all = "camelCase")]
         ReceiverStatus {
-            request_id: i32,
+            request_id: i64,
             status: Status,
         },
         SetVolume {

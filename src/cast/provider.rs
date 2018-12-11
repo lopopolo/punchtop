@@ -105,7 +105,7 @@ impl Default for SessionLifecycle {
 pub struct ConnectState {
     session: Option<String>,
     transport: Option<String>,
-    media_session: Option<i32>,
+    media_session: Option<i64>,
     pub lifecycle: SessionLifecycle,
 }
 
@@ -151,7 +151,7 @@ impl ConnectState {
         changed
     }
 
-    pub fn set_media_session(&mut self, media_session: Option<i32>) -> bool {
+    pub fn set_media_session(&mut self, media_session: Option<i64>) -> bool {
         let mut changed = false;
         if self.media_session != media_session {
             changed = true;
@@ -170,5 +170,5 @@ pub struct ReceiverConnection {
 #[derive(Clone, Debug)]
 pub struct MediaConnection {
     pub receiver: ReceiverConnection,
-    pub session: i32,
+    pub session: i64,
 }

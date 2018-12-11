@@ -31,7 +31,7 @@ pub fn task(
 /// `None` otherwise.
 pub fn register_media_session(
     state: Mutex<ConnectState>,
-    session: i32,
+    session: i64,
 ) -> impl Future<Item = Option<MediaConnection>, Error = ()> {
     state
         .lock()

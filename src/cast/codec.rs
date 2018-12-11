@@ -36,7 +36,7 @@ impl Default for DecodeState {
 #[derive(Debug, Default)]
 pub struct CastMessageCodec {
     state: DecodeState,
-    request_id: i32,
+    request_id: i64,
     decoded_frames: i64,
     encoded_frames: i64,
 }

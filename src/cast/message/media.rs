@@ -7,7 +7,7 @@ use cast::provider::{Media, MediaConnection, ReceiverConnection};
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 
 pub fn load(
-    request_id: i32,
+    request_id: i64,
     connect: &ReceiverConnection,
     media: Media,
 ) -> Result<CastMessage, Error> {
@@ -29,7 +29,7 @@ pub fn load(
     Ok(message(&connect.transport, payload))
 }
 
-pub fn play(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
+pub fn play(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = to_string(&media::Payload::Play {
         request_id,
         media_session_id: connect.session,
@@ -38,7 +38,7 @@ pub fn play(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, E
     Ok(message(&connect.receiver.transport, payload))
 }
 
-pub fn status(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
+pub fn status(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = to_string(&media::Payload::GetStatus {
         request_id,
         media_session_id: Some(connect.session),
@@ -46,7 +46,7 @@ pub fn status(request_id: i32, connect: &MediaConnection) -> Result<CastMessage,
     Ok(message(&connect.receiver.transport, payload))
 }
 
-pub fn stop(request_id: i32, connect: &MediaConnection) -> Result<CastMessage, Error> {
+pub fn stop(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = serde_json::to_string(&media::Payload::Stop {
         request_id,
         media_session_id: connect.session,
