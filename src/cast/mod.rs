@@ -131,7 +131,7 @@ pub fn connect(
     let shutdown_rx = (shutdown_writer.1, shutdown_heartbeat.1, shutdown_status.1);
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
-        let (sink, source) = Framed::new(socket, CastMessageCodec::new()).split();
+        let (sink, source) = Framed::new(socket, CastMessageCodec::default()).split();
         let read = worker::read::task(
             source,
             connect.clone(),
