@@ -39,7 +39,9 @@ struct TrackRegistry(RwLock<HashMap<String, Track>>);
 
 #[get("/media/<id>")]
 fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
-    state.0.read()
+    state
+        .0
+        .read()
         .ok()
         .and_then(|registry| registry.get(&id).and_then(|track| track.stream()))
         .and_then(|mut stream| {
@@ -55,7 +57,9 @@ fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8
 
 #[get("/cover/<id>")]
 fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
-    state.0.read()
+    state
+        .0
+        .read()
         .ok()
         .and_then(|registry| registry.get(&id).and_then(|track| track.cover()))
         .map(|img| img.unwrap()) // TODO: set Content-Type header
@@ -76,7 +80,8 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Socke
     thread::spawn(|| {
         rocket::custom(config)
             .manage(TrackRegistry(RwLock::new(registry)))
-            .mount("/", routes![media, cover]).launch();
+            .mount("/", routes![media, cover])
+            .launch();
     });
     Ok(addr)
 }

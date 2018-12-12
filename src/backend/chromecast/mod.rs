@@ -12,8 +12,8 @@ use playlist::Track;
 
 mod media_server;
 mod parser;
-use cast::{self, Chromecast, Image};
 use self::media_server::Route;
+use cast::{self, Chromecast, Image};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
