@@ -10,6 +10,7 @@ use rocket::config::{Config, Environment};
 use rocket::response::Stream;
 use rocket::State;
 
+use backend::chromecast::Media;
 use playlist::Track;
 
 /// Media server error wrapper.
@@ -19,6 +20,19 @@ pub enum Error {
     NoBindInterfaces,
     /// No ports available to bind to on selected interface.
     NoBindPort,
+}
+
+#[derive(Clone, Debug)]
+pub struct Route(pub SocketAddr);
+
+impl Route {
+    pub fn media(&self, media: &Media) -> String {
+        format!("http://{}/{}", self.0, uri!(media: media.track.id()))
+    }
+
+    pub fn cover(&self, media: &Media) -> String {
+        format!("http://{}/{}", self.0, uri!(cover: media.track.id()))
+    }
 }
 
 struct TrackRegistry(RwLock<HashMap<String, Track>>);

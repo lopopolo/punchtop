@@ -12,7 +12,8 @@ use playlist::Track;
 
 mod media_server;
 mod parser;
-use cast::{self, Chromecast, Image, Media};
+use cast::{self, Chromecast, Image};
+use self::media_server::Route;
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";
@@ -50,22 +51,14 @@ impl Hash for CastAddr {
 }
 
 #[derive(Clone, Debug)]
-struct CastTrack {
-    server: SocketAddr,
+pub struct Media {
     track: Track,
+    router: Route,
 }
 
-impl CastTrack {
-    pub fn media(&self) -> String {
-        format!("http://{}/media/{}", self.server, self.track.id())
-    }
-
-    pub fn cover(&self) -> String {
-        format!("http://{}/cover/{}", self.server, self.track.id())
-    }
-
-    pub fn metadata(&self) -> Option<Media> {
-        let url = Url::parse(&self.cover()).ok();
+impl Media {
+    pub fn metadata(&self) -> Option<cast::Media> {
+        let url = Url::parse(&self.router.cover(&self)).ok();
         let dimensions = self
             .track
             .cover()
@@ -75,9 +68,9 @@ impl CastTrack {
             _ => None,
         };
         let tags = self.track.tags();
-        let url = Url::parse(&self.media()).ok();
+        let url = Url::parse(&self.router.media(&self)).ok();
         match (tags, url) {
-            (Some(tags), Some(url)) => Some(Media {
+            (Some(tags), Some(url)) => Some(cast::Media {
                 title: tags.title.to_option(),
                 artist: tags.artist.to_option(),
                 album: tags.album.to_option(),
@@ -141,9 +134,9 @@ impl Device {
         let addr = self
             .media_server_bind_addr
             .ok_or(Error::BackendNotInitialized)?;
-        let track = CastTrack {
-            server: addr,
+        let track = Media {
             track,
+            router: Route(addr),
         };
         let media = track
             .metadata()
