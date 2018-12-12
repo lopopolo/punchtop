@@ -27,11 +27,11 @@ pub struct Route(pub SocketAddr);
 
 impl Route {
     pub fn media(&self, media: &Media) -> String {
-        format!("http://{}/{}", self.0, uri!(media: media.track.id()))
+        format!("http://{}{}", self.0, uri!(media: media.track.id()))
     }
 
     pub fn cover(&self, media: &Media) -> String {
-        format!("http://{}/{}", self.0, uri!(cover: media.track.id()))
+        format!("http://{}{}", self.0, uri!(cover: media.track.id()))
     }
 }
 
