@@ -1,4 +1,5 @@
 #![feature(inner_deref)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 extern crate byteorder;
 extern crate bytes;
@@ -22,6 +23,8 @@ extern crate objc;
 extern crate openssl;
 extern crate protobuf;
 extern crate rand;
+#[macro_use]
+extern crate rocket;
 extern crate rodio;
 extern crate rouille;
 extern crate serde;
