@@ -81,7 +81,7 @@ impl Device {
     }
 
     fn play(&self, track: Track) -> backend::Result {
-        File::open(track.path())
+        File::open(&track.path)
             .map_err(|_| Error::CannotLoadMedia(track))
             .and_then(|f| Decoder::new(BufReader::new(f)).map_err(Error::Rodio))
             .map(|source| source.buffered())

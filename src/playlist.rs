@@ -1,6 +1,7 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{Cursor, Read};
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
@@ -8,8 +9,9 @@ use std::vec::Vec;
 use floating_duration::TimeAsFloat;
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
+use rand::distributions::Alphanumeric;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 use walkdir::WalkDir;
 
 // https://developers.google.com/cast/docs/media#audio_codecs
@@ -86,12 +88,22 @@ impl Config {
 
 #[derive(Clone, Debug)]
 pub struct Track {
-    path: PathBuf,
+    pub path: PathBuf, // TODO: Make this private
+    id: String,
 }
 
 impl Track {
     pub fn new(path: PathBuf) -> Self {
-        Track { path }
+        let mut rng = thread_rng();
+        let id: String = iter::repeat(())
+            .map(|()| rng.sample(Alphanumeric))
+            .take(8)
+            .collect();
+        Track { path, id }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     pub fn tags(&self) -> Option<Tags> {
@@ -102,18 +114,18 @@ impl Track {
         get_front_cover(&self.path).ok().filter(|img| img.is_some())
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
+    pub fn stream(&self) -> Option<impl Read> {
+        File::open(&self.path).ok()
     }
 
     pub fn content_type(&self) -> String {
-        tree_magic::from_filepath(self.path())
+        tree_magic::from_filepath(&self.path)
     }
 }
 
 #[derive(Debug)]
 pub struct Playlist {
-    tracks: VecDeque<PathBuf>,
+    tracks: VecDeque<Track>,
     config: Config,
     cursor: u64,
 }
@@ -128,7 +140,7 @@ impl Playlist {
             .filter(|e| is_audio_media(e.path()))
             .filter(|e| is_sufficient_duration(e.path(), config.duration));
         for entry in walker {
-            vec.push(PathBuf::from(entry.path()));
+            vec.push(Track::new(PathBuf::from(entry.path())));
         }
 
         let mut rng = thread_rng();
@@ -139,6 +151,14 @@ impl Playlist {
             config: config.clone(),
             cursor: 0,
         }
+    }
+
+    pub fn registry(&self) -> HashMap<String, Track> {
+        let mut registry = HashMap::new();
+        for track in &self.tracks {
+            registry.insert(track.id().to_owned(), track.clone());
+        }
+        registry
     }
 }
 
@@ -151,11 +171,8 @@ impl Iterator for Playlist {
         }
         self.cursor += 1;
         match self.tracks.pop_front() {
-            Some(path) => {
-                let track = Track {
-                    path: path.to_path_buf(),
-                };
-                self.tracks.push_back(path);
+            Some(track) => {
+                self.tracks.push_back(track.clone());
                 Some((self.cursor, track))
             }
             None => None,

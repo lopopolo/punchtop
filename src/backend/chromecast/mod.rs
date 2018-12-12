@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use futures::sync::mpsc::UnboundedReceiver;
@@ -9,7 +8,7 @@ use mdns::RecordKind;
 use url::Url;
 
 use backend::{self, Error, PlayerKind};
-use playlist::{Config, Track};
+use playlist::Track;
 
 mod media_server;
 mod parser;
@@ -50,33 +49,23 @@ impl Hash for CastAddr {
     }
 }
 
-struct CastTrack<'a> {
-    root: &'a Path,
+#[derive(Clone, Debug)]
+struct CastTrack {
     server: SocketAddr,
     track: Track,
 }
 
-impl<'a> CastTrack<'a> {
-    fn url_path(&self) -> Option<String> {
-        PathBuf::from(self.track.path())
-            .strip_prefix(self.root)
-            .ok()
-            .and_then(|suffix| suffix.to_str())
-            .map(String::from)
+impl CastTrack {
+    pub fn media(&self) -> String {
+        format!("http://{}/media/{}", self.server, self.track.id())
     }
 
-    pub fn media(&self) -> Option<String> {
-        self.url_path()
-            .map(|path| format!("http://{}/media/{}", self.server, path))
-    }
-
-    pub fn image(&self) -> Option<String> {
-        self.url_path()
-            .map(|path| format!("http://{}/image/{}", self.server, path))
+    pub fn cover(&self) -> String {
+        format!("http://{}/cover/{}", self.server, self.track.id())
     }
 
     pub fn metadata(&self) -> Option<Media> {
-        let url = self.image().and_then(|url| Url::parse(&url).ok());
+        let url = Url::parse(&self.cover()).ok();
         let dimensions = self
             .track
             .cover()
@@ -86,7 +75,7 @@ impl<'a> CastTrack<'a> {
             _ => None,
         };
         let tags = self.track.tags();
-        let url = self.media().and_then(|url| Url::parse(&url).ok());
+        let url = Url::parse(&self.media()).ok();
         match (tags, url) {
             (Some(tags), Some(url)) => Some(Media {
                 title: tags.title.to_option(),
@@ -102,7 +91,6 @@ impl<'a> CastTrack<'a> {
 }
 
 pub struct Device {
-    game_config: Config,
     connect_config: CastAddr,
     pub cast: Option<Chromecast>, // TODO: don't expose this
     media_server_bind_addr: Option<SocketAddr>,
@@ -119,9 +107,10 @@ impl Device {
 
     pub fn connect(
         &mut self,
+        registry: HashMap<String, Track>,
         rt: &mut tokio::runtime::Runtime,
     ) -> Result<UnboundedReceiver<cast::Status>, backend::Error> {
-        match media_server::spawn(self.game_config.root(), self.connect_config.addr) {
+        match media_server::spawn(registry, self.connect_config.addr) {
             Ok(addr) => {
                 self.media_server_bind_addr = Some(addr);
                 let (cast, status) = cast::connect(self.connect_config.addr, rt);
@@ -153,7 +142,6 @@ impl Device {
             .media_server_bind_addr
             .ok_or(Error::BackendNotInitialized)?;
         let track = CastTrack {
-            root: self.game_config.root(),
             server: addr,
             track,
         };
@@ -176,7 +164,6 @@ impl Device {
 /// See [`devices()`](fn.devices.html).
 pub struct Devices {
     connect: std::collections::hash_set::IntoIter<CastAddr>,
-    game: Config,
 }
 
 impl Iterator for Devices {
@@ -185,7 +172,6 @@ impl Iterator for Devices {
     fn next(&mut self) -> Option<Self::Item> {
         self.connect.next().map(|connect_config| Device {
             connect_config,
-            game_config: self.game.clone(),
             cast: None,
             media_server_bind_addr: None,
         })
@@ -193,7 +179,7 @@ impl Iterator for Devices {
 }
 
 /// An iterator yielding Chromecast `Device`s available for audio playback.
-pub fn devices(game_config: Config) -> Devices {
+pub fn devices() -> Devices {
     let mut devices = HashSet::new();
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
         for response in discovery.timeout(DISCOVER_TIMEOUT) {
@@ -224,6 +210,5 @@ pub fn devices(game_config: Config) -> Devices {
     }
     Devices {
         connect: devices.into_iter(),
-        game: game_config,
     }
 }

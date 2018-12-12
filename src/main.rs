@@ -26,7 +26,6 @@ extern crate rand;
 #[macro_use]
 extern crate rocket;
 extern crate rodio;
-extern crate rouille;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -91,12 +90,12 @@ fn main() {
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = Config::new(Duration::new(60, 0), 20, root);
-    let player = backend::chromecast::devices(config.clone())
+    let player = backend::chromecast::devices()
         .filter(|p| p.kind() == PlayerKind::Chromecast)
         .find(|p| p.name() == "Kitchen Home");
     if let Some(mut backend) = player {
-        let status = backend.connect(&mut rt).unwrap();
         let playlist = playlist::Playlist::from_directory(&config);
+        let status = backend.connect(playlist.registry(), &mut rt).unwrap();
         let mut game = Game {
             playlist,
             client: backend,
