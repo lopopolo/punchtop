@@ -5,6 +5,7 @@ use std::io::{Cursor, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::RwLock;
 use std::thread;
+use std::time::Duration;
 
 use rand::{thread_rng, RngCore};
 use rocket::config::{Config, Environment};
@@ -99,7 +100,7 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route
 ///
 /// Used as bind address for the media server.
 fn default_interface_addr(addr: SocketAddr) -> Result<SocketAddr, Error> {
-    TcpStream::connect(addr)
+    TcpStream::connect_timeout(&addr, Duration::from_millis(150))
         .and_then(|conn| conn.local_addr())
         .map_err(|_| Error::NoBindInterfaces)
 }

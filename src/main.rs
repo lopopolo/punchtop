@@ -86,13 +86,13 @@ impl Game {
     }
 }
 
-const CAST: &str = "TV";
+const CAST: &str = "Kitchen Home";
 
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = Config::new(Duration::new(60, 0), 20, root);
+    let config = Config::new(Duration::new(60, 0), 3, root);
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
     let player = match player {
         Some(player) => player,
@@ -104,7 +104,8 @@ fn main() {
     let playlist = playlist::Playlist::from_directory(&config);
     let (client, chan) = match Device::connect(player, playlist.registry(), &mut rt) {
         Ok(connect) => connect,
-        Err(_) => {
+        Err(err) => {
+            warn!("chromecast connect error: {:?}", err);
             eprintln!("Could not connect to chromecast named {}", CAST);
             ::std::process::exit(1);
         }
