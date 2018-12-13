@@ -11,11 +11,22 @@ pub fn load(
     connect: &ReceiverConnection,
     media: Media,
 ) -> Result<CastMessage, Error> {
+    let mut metadata = media::Metadata::music_default();
+    metadata.title = media.title;
+    metadata.artist = media.artist;
+    metadata.album_name = media.album;
+    if let Some(image) = media.cover {
+        metadata.images.push(media::Image {
+            url: image.url.to_string(),
+            width: Some(image.dimensions.0),
+            height: Some(image.dimensions.1),
+        });
+    }
     let media = media::MediaInformation {
         content_id: media.url.to_string(),
         stream_type: media::StreamType::None,
         content_type: media.content_type,
-        metadata: None,
+        metadata: Some(metadata),
         duration: None,
     };
     let payload = to_string(&media::Payload::Load {

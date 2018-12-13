@@ -85,7 +85,7 @@ impl Game {
     }
 }
 
-const CAST: &str = "Kitchen Home";
+const CAST: &str = "TV";
 
 fn main() {
     env_logger::init();
