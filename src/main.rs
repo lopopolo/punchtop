@@ -47,7 +47,7 @@ mod backend;
 mod cast;
 mod playlist;
 
-use backend::PlayerKind;
+use backend::chromecast::Device;
 use cast::Status;
 use playlist::Config;
 
@@ -55,7 +55,7 @@ struct Game {
     playlist: playlist::Playlist,
     client: backend::chromecast::Device,
     connect: Option<cast::ReceiverConnection>,
-    media_connect: Option<cast::MediaConnection>,
+    session: Option<cast::MediaConnection>,
     config: Config,
 }
 
@@ -66,78 +66,88 @@ impl Game {
             None => return None,
         };
         self.playlist.next().map(|(cursor, track)| {
-            let _ = self.client.load(connect, track);
+            let _ = self.client.load(connect, &track);
             cursor
         })
     }
 
     fn play(&self) {
-        if let Some(ref connect) = self.media_connect {
-            let _ = self.client.play(connect);
+        if let Some(ref session) = self.session {
+            let _ = self.client.play(session);
         };
     }
 
     fn shutdown(&mut self) {
-        if let Some(ref connect) = self.media_connect {
-            let _ = self.client.stop(connect);
+        if let Some(ref session) = self.session {
+            let _ = self.client.stop(session);
         }
         let _ = self.client.shutdown();
     }
 }
+
+const CAST: &str = "Kitchen Home";
 
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = Config::new(Duration::new(60, 0), 20, root);
-    let player = backend::chromecast::devices()
-        .filter(|p| p.kind() == PlayerKind::Chromecast)
-        .find(|p| p.name() == "Kitchen Home");
-    if let Some(mut backend) = player {
-        let playlist = playlist::Playlist::from_directory(&config);
-        let status = backend.connect(playlist.registry(), &mut rt).unwrap();
-        let mut game = Game {
-            playlist,
-            client: backend,
-            connect: None,
-            media_connect: None,
-            config,
-        };
-        let play_loop = status
-            .for_each(move |message| {
-                match message {
-                    Status::Connected(connect) => {
-                        game.connect = Some(*connect);
-                        game.load_next();
-                    }
-                    Status::MediaConnected(connect) => {
-                        game.media_connect = Some(*connect);
-                        game.play();
-                    }
-                    Status::MediaStatus(status) => {
-                        let advance = status.current_time
-                            > game.config.duration.as_fractional_secs()
-                            && game.media_connect.is_some();
-                        if advance {
-                            info!("Time limit reached. Advancing game");
-                            match game.load_next() {
-                                Some(cursor) => {
-                                    game.media_connect = None;
-                                    info!("Advancing to track {}", cursor);
-                                }
-                                None => {
-                                    warn!("No more tracks. Shutting down");
-                                    game.shutdown();
-                                }
+    let player = backend::chromecast::devices().find(|p| p.name == CAST);
+    let player = match player {
+        Some(player) => player,
+        None => {
+            eprintln!("Could not find chromecast named {}", CAST);
+            ::std::process::exit(1);
+        }
+    };
+    let playlist = playlist::Playlist::from_directory(&config);
+    let (client, chan) = match Device::connect(player, playlist.registry(), &mut rt) {
+        Ok(connect) => connect,
+        Err(_) => {
+            eprintln!("Could not connect to chromecast named {}", CAST);
+            ::std::process::exit(1);
+        }
+    };
+    let mut game = Game {
+        playlist,
+        client,
+        connect: None,
+        session: None,
+        config,
+    };
+    let play_loop = chan
+        .for_each(move |message| {
+            match message {
+                Status::Connected(connect) => {
+                    game.connect = Some(*connect);
+                    game.load_next();
+                }
+                Status::MediaConnected(session) => {
+                    game.session = Some(*session);
+                    game.play();
+                }
+                Status::MediaStatus(status) => {
+                    let advance = status.current_time > game.config.duration.as_fractional_secs()
+                        && game.session.is_some();
+                    if advance {
+                        info!("Time limit reached. Advancing game");
+                        match game.load_next() {
+                            Some(cursor) => {
+                                game.session = None;
+                                info!("Advancing to track {}", cursor);
+                            }
+                            None => {
+                                warn!("No more tracks. Shutting down");
+                                game.shutdown();
                             }
                         }
                     }
-                    message => warn!("Got unknown message: {:?}", message),
-                };
-                Ok(())
-            })
-            .into_future();
-        rt.spawn(play_loop);
-    }
+                }
+                message => warn!("Got unknown message: {:?}", message),
+            };
+            Ok(())
+        })
+        .into_future();
+    rt.spawn(play_loop);
     rt.shutdown_on_idle().wait().unwrap();
 }

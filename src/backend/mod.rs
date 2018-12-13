@@ -1,7 +1,5 @@
 use rodio;
 
-use playlist::Track;
-
 pub mod chromecast;
 pub mod local;
 
@@ -12,7 +10,7 @@ pub type Result = std::result::Result<(), Error>;
 #[derive(Debug)]
 pub enum Error {
     BackendNotInitialized,
-    CannotLoadMedia(Track),
+    CannotLoadMedia,
     Rodio(rodio::decoder::DecoderError),
 }
 
@@ -21,6 +19,6 @@ pub enum Error {
 pub enum PlayerKind {
     /// Local playback using a `rodio` backend.
     Local,
-    /// Chromecast playback.
-    Chromecast,
+    // /// Chromecast playback.
+    // TODO: Chromecast,
 }

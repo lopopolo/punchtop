@@ -9,8 +9,8 @@ use std::thread;
 use rocket::config::{Config, Environment};
 use rocket::response::Stream;
 use rocket::State;
+use url::Url;
 
-use backend::chromecast::Media;
 use playlist::Track;
 
 /// Media server error wrapper.
@@ -20,18 +20,24 @@ pub enum Error {
     NoBindInterfaces,
     /// No ports available to bind to on selected interface.
     NoBindPort,
+    /// Could not construct a base url for `Route`.
+    NoBaseUrl,
 }
 
 #[derive(Clone, Debug)]
-pub struct Route(pub SocketAddr);
+pub struct Route {
+    base: Url,
+}
 
 impl Route {
-    pub fn media(&self, media: &Media) -> String {
-        format!("http://{}{}", self.0, uri!(media: media.track.id()))
+    pub fn media(&self, track: &Track) -> Url {
+        self.base
+            .join(&uri!(media: track.id()).to_string())
+            .unwrap()
     }
 
-    pub fn cover(&self, media: &Media) -> String {
-        format!("http://{}{}", self.0, uri!(cover: media.track.id()))
+    pub fn cover(&self, track: &Track) -> Url {
+        self.base.join(&uri!(cover:track.id()).to_string()).unwrap()
     }
 }
 
@@ -68,8 +74,10 @@ fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8
 }
 
 /// Spawn a thread that runs a media server for the given track registry.
-pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<SocketAddr, Error> {
+pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route, Error> {
     let addr = default_interface_addr(cast).and_then(get_available_port)?;
+    let base = Url::parse(&format!("http://{}/", addr)).map_err(|_| Error::NoBaseUrl)?;
+    let router = Route { base };
     debug!("bind to {:?}", addr);
     // TODO: call `set_secret_key` with a base64-encoded 256-bit random value
     // to address a warning from rocket.
@@ -83,7 +91,7 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Socke
             .mount("/", routes![media, cover])
             .launch();
     });
-    Ok(addr)
+    Ok(router)
 }
 
 /// Find the socket address of the default network interface used to

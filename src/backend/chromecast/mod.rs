@@ -5,9 +5,8 @@ use std::time::Duration;
 
 use futures::sync::mpsc::UnboundedReceiver;
 use mdns::RecordKind;
-use url::Url;
 
-use backend::{self, Error, PlayerKind};
+use backend::{self, Error};
 use playlist::Track;
 
 mod media_server;
@@ -23,17 +22,12 @@ const CHROMECAST_NAME_KEY: &str = "fn";
 const DISCOVER_TIMEOUT: Duration = Duration::from_millis(3000);
 
 /// Configuration for Chromecast endpoints.
-struct CastAddr {
+#[derive(Debug)]
+pub struct CastAddr {
     /// Name of a Chromecast as given by the `fn` field in its DNS TXT record.
-    name: String,
+    pub name: String,
     /// Address of Chromecast as discovered by mdns.
     addr: SocketAddr,
-}
-
-impl CastAddr {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
 }
 
 impl PartialEq for CastAddr {
@@ -50,105 +44,63 @@ impl Hash for CastAddr {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Media {
-    track: Track,
-    router: Route,
-}
-
-impl Media {
-    pub fn metadata(&self) -> Option<cast::Media> {
-        let url = Url::parse(&self.router.cover(&self)).ok();
-        let dimensions = self
-            .track
-            .cover()
-            .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h)));
-        let cover = match (url, dimensions) {
-            (Some(url), Some(dimensions)) => Some(Image { url, dimensions }),
-            _ => None,
-        };
-        let tags = self.track.tags();
-        let url = Url::parse(&self.router.media(&self)).ok();
-        match (tags, url) {
-            (Some(tags), Some(url)) => Some(cast::Media {
-                title: tags.title.to_option(),
-                artist: tags.artist.to_option(),
-                album: tags.album.to_option(),
-                url,
-                cover,
-                content_type: self.track.content_type(),
-            }),
-            _ => None,
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Device {
-    connect_config: CastAddr,
-    pub cast: Option<Chromecast>, // TODO: don't expose this
-    media_server_bind_addr: Option<SocketAddr>,
+    router: Route,
+    cast: Chromecast,
 }
 
 impl Device {
-    pub fn name(&self) -> String {
-        self.connect_config.name().to_owned()
-    }
-
-    pub fn kind(&self) -> PlayerKind {
-        PlayerKind::Chromecast
-    }
-
     pub fn connect(
-        &mut self,
+        config: CastAddr,
         registry: HashMap<String, Track>,
         rt: &mut tokio::runtime::Runtime,
-    ) -> Result<UnboundedReceiver<cast::Status>, backend::Error> {
-        match media_server::spawn(registry, self.connect_config.addr) {
-            Ok(addr) => {
-                self.media_server_bind_addr = Some(addr);
-                let (cast, status) = cast::connect(self.connect_config.addr, rt);
-                cast.launch_app();
-                self.cast = Some(cast);
-                Ok(status)
-            }
-            Err(_) => Err(Error::BackendNotInitialized),
-        }
+    ) -> Result<(Self, UnboundedReceiver<cast::Status>), backend::Error> {
+        let router =
+            media_server::spawn(registry, config.addr).map_err(|_| Error::BackendNotInitialized)?;
+        let (cast, status) = cast::connect(config.addr, rt);
+        cast.launch_app();
+        let backend = Self { router, cast };
+        Ok((backend, status))
     }
 
     pub fn stop(&self, connect: &cast::MediaConnection) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        cast.stop(connect);
+        self.cast.stop(connect);
         Ok(())
     }
 
     pub fn shutdown(&mut self) -> backend::Result {
-        let cast = self.cast.take();
-        if let Some(cast) = cast {
-            cast.shutdown();
-        }
+        // self.cast.shutdown();
         Ok(())
     }
 
-    pub fn load(&self, connect: &cast::ReceiverConnection, track: Track) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        let addr = self
-            .media_server_bind_addr
-            .ok_or(Error::BackendNotInitialized)?;
-        let track = Media {
-            track,
-            router: Route(addr),
-        };
-        let media = track
-            .metadata()
-            .ok_or_else(|| Error::CannotLoadMedia(track.track))?;
-        cast.load(connect, media);
+    pub fn load(&self, connect: &cast::ReceiverConnection, track: &Track) -> backend::Result {
+        let media = self.metadata(track).ok_or_else(|| Error::CannotLoadMedia)?;
+        self.cast.load(connect, media);
         Ok(())
     }
 
     pub fn play(&self, connect: &cast::MediaConnection) -> backend::Result {
-        let cast = self.cast.as_ref().ok_or(Error::BackendNotInitialized)?;
-        cast.play(connect);
+        self.cast.play(connect);
         Ok(())
+    }
+
+    fn metadata(&self, track: &Track) -> Option<cast::Media> {
+        let url = self.router.cover(track);
+        let cover = track
+            .cover()
+            .and_then(|img| img.dimensions().map(|(w, h, _)| (w, h)))
+            .map(|dimensions| Image { url, dimensions });
+        let tags = track.tags();
+        let url = self.router.media(track);
+        tags.map(|tags| cast::Media {
+            title: tags.title.to_option(),
+            artist: tags.artist.to_option(),
+            album: tags.album.to_option(),
+            url,
+            cover,
+            content_type: track.content_type(),
+        })
     }
 }
 
@@ -160,14 +112,10 @@ pub struct Devices {
 }
 
 impl Iterator for Devices {
-    type Item = Device;
+    type Item = CastAddr;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.connect.next().map(|connect_config| Device {
-            connect_config,
-            cast: None,
-            media_server_bind_addr: None,
-        })
+        self.connect.next()
     }
 }
 
