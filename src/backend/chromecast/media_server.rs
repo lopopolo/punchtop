@@ -6,6 +6,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::RwLock;
 use std::thread;
 
+use rand::{thread_rng, RngCore};
 use rocket::config::{Config, Environment};
 use rocket::response::Stream;
 use rocket::State;
@@ -79,11 +80,10 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route
     let base = Url::parse(&format!("http://{}/", addr)).map_err(|_| Error::NoBaseUrl)?;
     let router = Route { base };
     debug!("bind to {:?}", addr);
-    // TODO: call `set_secret_key` with a base64-encoded 256-bit random value
-    // to address a warning from rocket.
     let config = Config::build(Environment::Production)
         .address(addr.ip().to_string())
         .port(addr.port())
+        .secret_key(generate_secret_key())
         .unwrap();
     thread::spawn(move || {
         rocket::custom(config)
@@ -117,4 +117,11 @@ fn get_available_port(addr: SocketAddr) -> Result<SocketAddr, Error> {
         })
         .find(|addr| port_is_available(*addr))
         .ok_or(Error::NoBindPort)
+}
+
+fn generate_secret_key() -> String {
+    // Rocket secret keys are 256 bits
+    let mut data = [0u8; 32];
+    thread_rng().fill_bytes(&mut data);
+    base64::encode(&data)
 }
