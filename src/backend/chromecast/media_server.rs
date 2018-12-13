@@ -85,7 +85,7 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route
         .address(format!("{}", addr.ip()))
         .port(addr.port())
         .unwrap();
-    thread::spawn(|| {
+    thread::spawn(move || {
         rocket::custom(config)
             .manage(TrackRegistry(RwLock::new(registry)))
             .mount("/", routes![media, cover])
