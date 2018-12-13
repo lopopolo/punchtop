@@ -1,6 +1,7 @@
 #![feature(inner_deref)]
 #![feature(proc_macro_hygiene, decl_macro)]
 
+extern crate base64;
 extern crate byteorder;
 extern crate bytes;
 extern crate env_logger;
