@@ -82,7 +82,7 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route
     // TODO: call `set_secret_key` with a base64-encoded 256-bit random value
     // to address a warning from rocket.
     let config = Config::build(Environment::Production)
-        .address(format!("{}", addr.ip()))
+        .address(addr.ip().to_string())
         .port(addr.port())
         .unwrap();
     thread::spawn(move || {

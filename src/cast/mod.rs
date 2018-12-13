@@ -101,10 +101,9 @@ fn tls_connect(addr: SocketAddr) -> impl Future<Item = TlsStream<TcpStream>, Err
     let connect = TcpStream::connect(&addr)
         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
         .and_then(move |socket| {
-            info!("Establishing TLS connection at {:?}", addr);
-            let domain = format!("{}", addr.ip());
+            info!("Establishing TLS connection to {:?}", addr);
             connector
-                .connect(&domain, socket)
+                .connect(&addr.ip().to_string(), socket)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         });
     future::Either::B(connect)
