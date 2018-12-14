@@ -1,6 +1,6 @@
 use serde_json::{to_string, Error};
 
-use cast::payload::*;
+use cast::payload::media::*;
 use cast::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
 use cast::provider::{Media, MediaConnection, ReceiverConnection};
 
@@ -11,46 +11,46 @@ pub fn load(
     connect: &ReceiverConnection,
     media: Media,
 ) -> Result<CastMessage, Error> {
-    let mut metadata = media::Metadata::music_default();
+    let mut metadata = Metadata::music_default();
     metadata.title = media.title;
     metadata.artist = media.artist;
     metadata.album_name = media.album;
     if let Some(image) = media.cover {
-        metadata.images.push(media::Image {
+        metadata.images.push(Image {
             url: image.url.to_string(),
             width: Some(image.dimensions.0),
             height: Some(image.dimensions.1),
         });
     }
-    let media = media::MediaInformation {
+    let media = MediaInformation {
         content_id: media.url.to_string(),
-        stream_type: media::StreamType::None,
+        stream_type: StreamType::None, // let the device decide whether to buffer
         content_type: media.content_type,
         metadata: Some(metadata),
         duration: None,
     };
-    let payload = to_string(&media::Payload::Load {
+    let payload = to_string(&Request::Load {
         request_id,
         session_id: connect.session.to_owned(),
         media,
         current_time: 0f64,
-        custom_data: media::CustomData::default(),
+        custom_data: CustomData::default(),
         autoplay: true,
     })?;
     Ok(message(&connect.transport, payload))
 }
 
 pub fn play(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
-    let payload = to_string(&media::Payload::Play {
+    let payload = to_string(&Request::Play {
         request_id,
         media_session_id: connect.session,
-        custom_data: media::CustomData::default(),
+        custom_data: CustomData::default(),
     })?;
     Ok(message(&connect.receiver.transport, payload))
 }
 
 pub fn status(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
-    let payload = to_string(&media::Payload::GetStatus {
+    let payload = to_string(&Request::GetStatus {
         request_id,
         media_session_id: Some(connect.session),
     })?;
@@ -58,10 +58,10 @@ pub fn status(request_id: i64, connect: &MediaConnection) -> Result<CastMessage,
 }
 
 pub fn stop(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
-    let payload = serde_json::to_string(&media::Payload::Stop {
+    let payload = to_string(&Request::Stop {
         request_id,
         media_session_id: connect.session,
-        custom_data: media::CustomData::default(),
+        custom_data: CustomData::default(),
     })?;
     Ok(message(&connect.receiver.transport, payload))
 }

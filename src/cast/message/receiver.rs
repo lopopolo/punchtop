@@ -1,12 +1,12 @@
 use serde_json::{to_string, Error};
 
-use super::super::payload::*;
+use super::super::payload::receiver::*;
 use super::super::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
 
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.receiver";
 
 pub fn launch(request_id: i64, app_id: &str) -> Result<CastMessage, Error> {
-    let payload = to_string(&receiver::Payload::Launch {
+    let payload = to_string(&Request::Launch {
         request_id,
         app_id: app_id.to_owned(),
     })?;
@@ -14,7 +14,7 @@ pub fn launch(request_id: i64, app_id: &str) -> Result<CastMessage, Error> {
 }
 
 pub fn status(request_id: i64) -> Result<CastMessage, Error> {
-    let payload = serde_json::to_string(&receiver::Payload::GetStatus { request_id })?;
+    let payload = serde_json::to_string(&Request::GetStatus { request_id })?;
     Ok(message(super::DEFAULT_DESTINATION_ID, payload))
 }
 

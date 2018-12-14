@@ -1,12 +1,12 @@
 use serde_json::{to_string, Error};
 
-use super::super::payload::*;
+use super::super::payload::heartbeat::*;
 use super::super::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
 
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.heartbeat";
 
 pub fn ping() -> Result<CastMessage, Error> {
-    let payload = to_string(&heartbeat::Payload::Ping)?;
+    let payload = to_string(&Request::Ping)?;
     Ok(message(payload))
 }
 

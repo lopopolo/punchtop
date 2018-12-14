@@ -56,7 +56,6 @@ impl Encoder for CastMessageCodec {
             item
         );
         let message = match item {
-            Command::Close(connect) => message::connection::close(&connect.transport),
             Command::Connect(connect) => message::connection::connect(&connect.transport),
             Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(self.request_id, &app_id),
@@ -139,26 +138,26 @@ impl Decoder for CastMessageCodec {
                 );
                 match message.get_namespace() {
                     namespace::CONNECTION => {
-                        from_str::<connection::Payload>(message.get_payload_utf8())
+                        from_str::<connection::Response>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                             .map(Box::new)
                             .map(ChannelMessage::Connection)
                             .map(Some)
                     }
                     namespace::HEARTBEAT => {
-                        from_str::<heartbeat::Payload>(message.get_payload_utf8())
+                        from_str::<heartbeat::Response>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                             .map(Box::new)
                             .map(ChannelMessage::Heartbeat)
                             .map(Some)
                     }
-                    namespace::MEDIA => from_str::<media::Payload>(message.get_payload_utf8())
+                    namespace::MEDIA => from_str::<media::Response>(message.get_payload_utf8())
                         .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                         .map(Box::new)
                         .map(ChannelMessage::Media)
                         .map(Some),
                     namespace::RECEIVER => {
-                        from_str::<receiver::Payload>(message.get_payload_utf8())
+                        from_str::<receiver::Response>(message.get_payload_utf8())
                             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
                             .map(Box::new)
                             .map(ChannelMessage::Receiver)

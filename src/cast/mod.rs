@@ -27,10 +27,10 @@ pub const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
 
 #[derive(Debug)]
 pub enum ChannelMessage {
-    Connection(Box<connection::Payload>),
-    Heartbeat(Box<heartbeat::Payload>),
-    Media(Box<media::Payload>),
-    Receiver(Box<receiver::Payload>),
+    Connection(Box<connection::Response>),
+    Heartbeat(Box<heartbeat::Response>),
+    Media(Box<media::Response>),
+    Receiver(Box<receiver::Response>),
 }
 
 #[derive(Debug)]

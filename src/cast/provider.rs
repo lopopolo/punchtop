@@ -56,7 +56,6 @@ impl fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum Command {
-    Close(ReceiverConnection),
     Connect(ReceiverConnection),
     Heartbeat,
     Launch {

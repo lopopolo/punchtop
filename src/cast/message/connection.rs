@@ -1,20 +1,15 @@
 use serde_json::{to_string, Error};
 
-use super::super::payload::*;
+use super::super::payload::connection::*;
 use super::super::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
 
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.tp.connection";
 const USER_AGENT: &str = "Punchtop";
 
 pub fn connect(dest: &str) -> Result<CastMessage, Error> {
-    let payload = to_string(&connection::Payload::Connect {
+    let payload = to_string(&Request::Connect {
         user_agent: USER_AGENT.to_owned(),
     })?;
-    Ok(message(dest, payload))
-}
-
-pub fn close(dest: &str) -> Result<CastMessage, Error> {
-    let payload = to_string(&connection::Payload::Close)?;
     Ok(message(dest, payload))
 }
 

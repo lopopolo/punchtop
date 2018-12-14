@@ -43,9 +43,10 @@ fn read(
     }
 }
 
-fn do_media(message: media::Payload, tx: UnboundedSender<Status>, connect: Mutex<ConnectState>) {
+fn do_media(message: media::Response, tx: UnboundedSender<Status>, connect: Mutex<ConnectState>) {
+    use cast::payload::media::Response::*;
     match message {
-        media::Payload::MediaStatus { status, .. } => {
+        MediaStatus { status, .. } => {
             let status = status.into_iter().next();
             let media_session = status.as_ref().map(|status| status.media_session_id);
             match media_session {
@@ -70,33 +71,30 @@ fn do_media(message: media::Payload, tx: UnboundedSender<Status>, connect: Mutex
 }
 
 fn do_receiver(
-    message: receiver::Payload,
+    message: receiver::Response,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
     connect: Mutex<ConnectState>,
 ) {
-    match message {
-        receiver::Payload::ReceiverStatus { status, .. } => {
-            let app = status
-                .applications
-                .iter()
-                .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
-            let session = app.map(|app| app.session_id.to_owned());
-            let transport = app.map(|app| app.transport_id.to_owned());
-            let connect = connect.lock().map(move |mut state| {
-                trace!("Acquired connect state lock in receiver status");
-                let did_connect =
-                    state.set_session(session.deref()) && state.set_transport(transport.deref());
-                if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
-                    debug!("Connecting to transport {}", connect.transport);
-                    let _ = tx.unbounded_send(Status::Connected(Box::new(connect.clone())));
-                    // we've connected to the default receiver. Now connect to
-                    // the transport backing the launched app session.
-                    let _ = command.unbounded_send(Command::Connect(connect.clone()));
-                }
-            });
-            tokio::spawn(connect);
+    use cast::payload::receiver::Response::*;
+    let ReceiverStatus { status, .. } = message;
+    let app = status
+        .applications
+        .iter()
+        .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
+    let session = app.map(|app| app.session_id.to_owned());
+    let transport = app.map(|app| app.transport_id.to_owned());
+    let connect = connect.lock().map(move |mut state| {
+        trace!("Acquired connect state lock in receiver status");
+        let did_connect =
+            state.set_session(session.deref()) && state.set_transport(transport.deref());
+        if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
+            debug!("Connecting to transport {}", connect.transport);
+            let _ = tx.unbounded_send(Status::Connected(Box::new(connect.clone())));
+            // we've connected to the default receiver. Now connect to
+            // the transport backing the launched app session.
+            let _ = command.unbounded_send(Command::Connect(connect.clone()));
         }
-        payload => warn!("Got unknown payload on receiver channel: {:?}", payload),
-    }
+    });
+    tokio::spawn(connect);
 }
