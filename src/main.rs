@@ -41,16 +41,20 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use floating_duration::TimeAsFloat;
-use tokio::prelude::*;
+use futures::prelude::*;
+use futures::sync::oneshot;
+use futures::Stream;
 use tokio::runtime::Runtime;
 
 mod backend;
 mod cast;
 mod playlist;
+mod stream;
 
 use backend::chromecast::Device;
 use cast::Status;
 use playlist::Config;
+use stream::drain;
 
 struct Game {
     playlist: playlist::Playlist,
@@ -58,6 +62,7 @@ struct Game {
     connect: Option<cast::ReceiverConnection>,
     session: Option<cast::MediaConnection>,
     config: Config,
+    shutdown: Option<oneshot::Sender<()>>,
 }
 
 impl Game {
@@ -83,6 +88,9 @@ impl Game {
             let _ = self.client.stop(session);
         }
         let _ = self.client.shutdown();
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
     }
 }
 
@@ -92,7 +100,7 @@ fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = Config::new(Duration::new(60, 0), 3, root);
+    let config = Config::new(Duration::new(10, 0), 3, root);
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
     let player = match player {
         Some(player) => player,
@@ -110,14 +118,16 @@ fn main() {
             ::std::process::exit(1);
         }
     };
+    let (trigger, shutdown) = oneshot::channel::<()>();
     let mut game = Game {
         playlist,
         client,
         connect: None,
         session: None,
         config,
+        shutdown: Some(trigger),
     };
-    let play_loop = chan
+    let play_loop = drain(chan, shutdown.map(|_| ()).map_err(|_| ()))
         .for_each(move |message| {
             match message {
                 Status::Connected(connect) => {

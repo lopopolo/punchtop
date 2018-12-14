@@ -17,6 +17,8 @@ mod proto;
 mod provider;
 mod worker;
 
+use stream::drain;
+
 use self::codec::CastMessageCodec;
 pub use self::payload::*;
 pub use self::provider::*;
@@ -34,11 +36,7 @@ pub enum ChannelMessage {
 #[derive(Debug)]
 pub struct Chromecast {
     command: UnboundedSender<Command>,
-    shutdown: (
-        oneshot::Sender<()>,
-        oneshot::Sender<()>,
-        oneshot::Sender<()>,
-    ),
+    shutdown: Option<oneshot::Sender<()>>,
     status: UnboundedSender<Status>,
     connect: Mutex<ConnectState>,
 }
@@ -78,11 +76,14 @@ impl Chromecast {
         let _ = self.command.unbounded_send(Command::Stop(connect.clone()));
     }
 
-    pub fn shutdown(mut self) {
-        let _ = self.shutdown.0.send(());
-        let _ = self.shutdown.1.send(());
-        let _ = self.shutdown.2.send(());
-        let _ = self.command.close();
+    pub fn shutdown(&mut self) {
+        let trigger = self.shutdown.take();
+        if let Some(trigger) = trigger {
+            let _ = trigger.send(());
+        }
+        if !self.command.is_closed() {
+            let _ = self.command.close();
+        }
     }
 }
 
@@ -116,18 +117,16 @@ pub fn connect(
     let (command_tx, command_rx) = unbounded();
     let (status_tx, status_rx) = unbounded();
 
-    let shutdown_writer = oneshot::channel();
-    let shutdown_heartbeat = oneshot::channel();
-    let shutdown_status = oneshot::channel();
+    let (trigger, shutdown) = oneshot::channel();
+    let shutdown = shutdown.shared();
 
     let connect = Mutex::new(ConnectState::default());
     let cast = Chromecast {
         command: command_tx.clone(),
-        shutdown: (shutdown_writer.0, shutdown_heartbeat.0, shutdown_status.0),
+        shutdown: Some(trigger),
         status: status_tx.clone(),
         connect: connect.clone(),
     };
-    let shutdown_rx = (shutdown_writer.1, shutdown_heartbeat.1, shutdown_status.1);
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, CastMessageCodec::default()).split();
@@ -138,20 +137,16 @@ pub fn connect(
             command_tx.clone(),
         );
         tokio::spawn(read);
-        let writer = writer(sink, command_rx)
-            .select(shutdown_rx.0.map_err(|_| ()))
-            .map_err(|_| ())
-            .map(|_| ());
+        let command_rx = drain(command_rx, shutdown.clone().map(|_| ()).map_err(|_| ()));
+        let writer = writer(sink, command_rx).map_err(|_| ()).map(|_| ());
         tokio::spawn(writer);
-
         let heartbeat = worker::heartbeat::task(command_tx.clone())
-            .select(shutdown_rx.1.map_err(|_| ()))
+            .select2(shutdown.clone())
             .map_err(|_| ())
             .map(|_| ());
         tokio::spawn(heartbeat);
-
         let status = worker::status::task(connect.clone(), command_tx.clone())
-            .select(shutdown_rx.2.map_err(|_| ()))
+            .select2(shutdown.clone())
             .map_err(|_| ())
             .map(|_| ());
         tokio::spawn(status);
@@ -162,7 +157,7 @@ pub fn connect(
 
 fn writer(
     sink: impl Sink<SinkItem = Command, SinkError = io::Error>,
-    command: UnboundedReceiver<Command>,
+    command: impl Stream<Item = Command, Error = ()>,
 ) -> impl Future<Item = (), Error = ()> {
     command
         .forward(sink.sink_map_err(|_| ()))

@@ -70,7 +70,7 @@ impl Device {
     }
 
     pub fn shutdown(&mut self) -> backend::Result {
-        // self.cast.shutdown();
+        self.cast.shutdown();
         Ok(())
     }
 
