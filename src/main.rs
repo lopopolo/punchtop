@@ -127,7 +127,7 @@ fn main() {
         config,
         shutdown: Some(trigger),
     };
-    let play_loop = drain(chan, shutdown.map(|_| ()).map_err(|_| ()))
+    let play_loop = drain(chan, shutdown.map_err(|_| ()))
         .for_each(move |message| {
             match message {
                 Status::Connected(connect) => {
