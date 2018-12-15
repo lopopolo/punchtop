@@ -29,3 +29,5 @@ const render = () => {
 };
 
 render();
+
+global.store = store;
