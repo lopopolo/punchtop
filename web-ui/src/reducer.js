@@ -2,11 +2,16 @@ import clamp from "clamp";
 import { combineReducers } from "redux";
 import { connectRouter } from "connected-react-router";
 
-import { TOGGLE_PLAYBACK, SET_ACTIVE_TRACK, SET_ELAPSED, SET_PLAYLIST } from "./actions";
+import {
+  TOGGLE_PLAYBACK,
+  SET_ACTIVE_TRACK,
+  SET_ELAPSED,
+  SET_PLAYLIST
+} from "./actions";
 
 const initialState = {
   media: {
-    "es0r5Icy": {
+    es0r5Icy: {
       artist: "Dillon Francis",
       title: "When We Were Young",
       cover: {
@@ -57,7 +62,7 @@ const reducer = (state = initialState, action) => {
         name: action.name
       });
       const config = Object.assign({}, state.config, {
-        source,
+        source
       });
       return Object.assign({}, state, { config });
     }

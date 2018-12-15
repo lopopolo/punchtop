@@ -23,4 +23,3 @@ export function setPlaylist(name) {
 export function togglePlayback() {
   return { type: TOGGLE_PLAYBACK };
 }
-
