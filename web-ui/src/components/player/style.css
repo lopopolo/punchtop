@@ -1,9 +1,23 @@
+.coverContainer {
+  position: relative;
+  width: 100%;
+}
+
+.coverContainer:before {
+  content: "";
+  display: block;
+  padding-top: 100%;
+}
+
 .cover {
   height: auto;
   max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  display: block;
+  position:  absolute;
+	top: 0;
+	left: 0;
+	bottom: 0;
+	right: 0;
+  margin: auto;
 }
 
 .metadata {
@@ -17,11 +31,16 @@
 }
 
 .title {
+  min-height: 1.25em;
+  line-height: 1.25em;
+  font-size: 1em;
   font-weight: bold;
 }
 
 .artist {
-  font-size: 0.95em;
+  min-height: 1.1em;
+  line-height: 1.1em;
+  font-size: 0.9em;
   color: gray;
 }
 

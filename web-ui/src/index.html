@@ -9,10 +9,27 @@
       html,
       body,
       #app {
-        height: 100vh;
+        min-height: 100vh;
         width: 100vw;
         margin: 0;
         padding: 0;
+      }
+      .cross-fade-leave {
+        opacity: 1;
+      }
+      .cross-fade-leave.cross-fade-leave-active {
+        opacity: 0;
+        transition: opacity 300ms ease-in-out;
+      }
+      .cross-fade-enter {
+        opacity: 0;
+      }
+      .cross-fade-enter.cross-fade-enter-active {
+        opacity: 1;
+        transition: opacity 300ms ease-in-out;
+      }
+      .cross-fade-height {
+        transition: height 150s ease-in-out;
       }
     </style>
   </head>

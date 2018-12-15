@@ -9,7 +9,7 @@ const App = ({ history }) => (
   <ConnectedRouter history={history}>
     <Container>
       <Switch>
-        <Route exact path="/" component={Player} />
+        <Route path="/" component={Player} />
       </Switch>
     </Container>
   </ConnectedRouter>

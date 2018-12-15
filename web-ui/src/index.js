@@ -7,6 +7,7 @@ import { Provider } from "react-redux";
 
 import rootReducer from "./reducer";
 import App from "./app";
+import * as actions from "./actions";
 import Root from "./components/root";
 
 const history = createBrowserHistory();
@@ -30,4 +31,5 @@ const render = () => {
 
 render();
 
+global.actions = actions;
 global.store = store;

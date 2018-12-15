@@ -32,6 +32,7 @@
     "connected-react-router": "^6.0.0",
     "history": "^4.7.2",
     "react": "^16.6.3",
+    "react-css-transition-replace": "^3.0.3",
     "react-dom": "^16.6.3",
     "react-player-controls": "^1.0.0-beta.0",
     "react-redux": "^6.0.0",

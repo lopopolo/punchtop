@@ -1,6 +1,7 @@
 import React from "react";
 import { PlayerIcon } from "react-player-controls";
 import { connect } from "react-redux";
+import ReactCSSTransitionReplace from "react-css-transition-replace";
 
 import style from "./style.css";
 import { togglePlayback } from "../../actions";
@@ -14,13 +15,21 @@ const ElapsedBar = ({ elapsed, duration }) => (
   </div>
 );
 
-const Player = ({ artist, title, cover, isPlaying, elapsed, duration, toggle }) => <div>
-    <img alt={`${artist} - ${title} album cover`} className={style.cover} width="600" height="600" src={cover} />
+const Player = ({ id, media, isPlaying, elapsed, duration, toggle }) => <div>
+    <ReactCSSTransitionReplace
+      transitionName="cross-fade"
+      transitionEnterTimeout={300}
+      transitionLeaveTimeout={300}
+    >
+      <div key={id} className={style.coverContainer}>
+        <img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} height={media.cover.height} width={media.cover.width} src={media.cover.url} />
+      </div>
+    </ReactCSSTransitionReplace>
     <Spacer height="1.5em" />
     <div className={style.metadata}>
-      <div className={style.title}>{title}</div>
+      <div className={style.title}>{media.title}</div>
       <Spacer height="0.5em" />
-      <div className={style.artist}>{artist}</div>
+      <div className={style.artist}>{media.artist}</div>
     </div>
     <Spacer height="1.5em" />
     <div className={style.player}>
@@ -32,14 +41,16 @@ const Player = ({ artist, title, cover, isPlaying, elapsed, duration, toggle }) 
     </div>
   </div>;
 
-const mapStateToProps = state => ({
-  artist: state.punchtop.media.artist,
-  title: state.punchtop.media.title,
-  cover: state.punchtop.media.cover,
-  isPlaying: state.punchtop.player.isPlaying,
-  elapsed: state.punchtop.player.elapsed,
-  duration: state.punchtop.config.duration,
-});
+const mapStateToProps = state => {
+  const id = state.punchtop.player.current;
+  return {
+    id,
+    media: state.punchtop.media[id],
+    isPlaying: state.punchtop.player.isPlaying,
+    elapsed: state.punchtop.player.elapsed,
+    duration: state.punchtop.config.duration,
+  }
+};
 
 const mapDispatchToProps = dispatch => ({
   toggle: () => dispatch(togglePlayback()),
