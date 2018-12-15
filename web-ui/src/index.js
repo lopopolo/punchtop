@@ -15,28 +15,32 @@ const ElapsedBar = ({ elapsed, duration }) => (
 
 const Spacer = ({ height }) => <div style={{height}} />
 
-const Index = () => <div>
+const Root = ({ children }) => <div>
     <div className={style.bg} />
     <div className={style.dim} />
     <div className={style.root}>
       <div className={style.container}>
-        <div className={style.title}>Punchtop</div>
-        <Spacer height="1.5em" />
-        <img alt="Dillon Francis - When We Were Young album cover" className={style.cover} width="600" height="600" src="http://0.0.0.0:8000/es0r5Icy.jpg" />
-        <Spacer height="1.5em" />
-        <div className={style.metadata}>
-          <div className={style.metadataTitle}>When We Were Young</div>
-          <Spacer height="0.5em" />
-          <div className={style.metadataArtist}>Dillon Francis</div>
-        </div>
-        <Spacer height="1.5em" />
-        <div className={style.mediaPlayer}>
-          <ElapsedBar elapsed={13.2} duration={20} />
-          <Spacer height="1em" />
-          <PlayerIcon.Play width={32} height={32} fill="lightgray" />
-        </div>
+        {children}
       </div>
     </div>
   </div>;
 
-ReactDOM.render(<Index />, document.getElementById("app"));
+const Mock = () => <div>
+    <div className={style.title}>Punchtop</div>
+    <Spacer height="1.5em" />
+    <img alt="Dillon Francis - When We Were Young album cover" className={style.cover} width="600" height="600" src="http://0.0.0.0:8000/es0r5Icy.jpg" />
+    <Spacer height="1.5em" />
+    <div className={style.metadata}>
+      <div className={style.metadataTitle}>When We Were Young</div>
+      <Spacer height="0.5em" />
+      <div className={style.metadataArtist}>Dillon Francis</div>
+    </div>
+    <Spacer height="1.5em" />
+    <div className={style.mediaPlayer}>
+      <ElapsedBar elapsed={13.2} duration={20} />
+      <Spacer height="1em" />
+      <PlayerIcon.Play width={32} height={32} fill="lightgray" />
+    </div>
+  </div>;
+
+ReactDOM.render(<Root><Mock /></Root>, document.getElementById("app"));
