@@ -1,5 +1,9 @@
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedReceiver;
+use futures::sync::oneshot;
+
+pub type DrainListener = oneshot::Receiver<()>;
+pub type DrainTrigger = oneshot::Sender<()>;
 
 #[derive(Debug, Eq, PartialEq)]
 enum DrainState {

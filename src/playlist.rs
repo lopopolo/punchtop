@@ -14,6 +14,8 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use walkdir::WalkDir;
 
+use app::AppConfig;
+
 // https://developers.google.com/cast/docs/media#audio_codecs
 fn is_audio_media(path: &Path) -> bool {
     let mime: &str = &tree_magic::from_filepath(path);
@@ -66,27 +68,6 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
 }
 
 #[derive(Clone, Debug)]
-pub struct Config {
-    pub duration: Duration,
-    pub count: u64,
-    root: PathBuf,
-}
-
-impl Config {
-    pub fn new(duration: Duration, count: u64, root: PathBuf) -> Self {
-        Config {
-            duration,
-            count,
-            root,
-        }
-    }
-
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct Track {
     pub path: PathBuf, // TODO: Make this private
     id: String,
@@ -126,14 +107,14 @@ impl Track {
 #[derive(Debug)]
 pub struct Playlist {
     tracks: VecDeque<Track>,
-    config: Config,
+    iterations: u64,
     cursor: u64,
 }
 
 impl Playlist {
-    pub fn from_directory(config: &Config) -> Self {
+    pub fn from_directory(root: &Path, config: &AppConfig) -> Self {
         let mut vec = Vec::new();
-        let walker = WalkDir::new(config.root())
+        let walker = WalkDir::new(root)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
@@ -148,7 +129,7 @@ impl Playlist {
 
         Playlist {
             tracks: VecDeque::from(vec),
-            config: config.clone(),
+            iterations: config.iterations,
             cursor: 0,
         }
     }
@@ -166,7 +147,7 @@ impl Iterator for Playlist {
     type Item = (u64, Track);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.cursor >= self.config.count {
+        if self.cursor >= self.iterations {
             return None;
         }
         self.cursor += 1;

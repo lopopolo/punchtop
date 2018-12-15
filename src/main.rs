@@ -38,59 +38,19 @@ extern crate walkdir;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use floating_duration::TimeAsFloat;
 use futures::prelude::*;
-use futures::sync::oneshot;
 use futures::Stream;
 use tokio::runtime::Runtime;
 
+mod app;
 mod backend;
 mod cast;
 mod playlist;
 mod stream;
 
+use app::{AppConfig, AppController};
 use backend::chromecast::Device;
-use cast::Status;
-use playlist::Config;
 use stream::drain;
-
-struct Game {
-    playlist: playlist::Playlist,
-    client: backend::chromecast::Device,
-    connect: Option<cast::ReceiverConnection>,
-    session: Option<cast::MediaConnection>,
-    config: Config,
-    shutdown: Option<oneshot::Sender<()>>,
-}
-
-impl Game {
-    fn load_next(&mut self) -> Option<u64> {
-        let connect = match self.connect {
-            Some(ref connect) => connect,
-            None => return None,
-        };
-        self.playlist.next().map(|(cursor, track)| {
-            let _ = self.client.load(connect, &track);
-            cursor
-        })
-    }
-
-    fn play(&self) {
-        if let Some(ref session) = self.session {
-            let _ = self.client.play(session);
-        };
-    }
-
-    fn shutdown(&mut self) {
-        if let Some(ref session) = self.session {
-            let _ = self.client.stop(session);
-        }
-        let _ = self.client.shutdown();
-        if let Some(shutdown) = self.shutdown.take() {
-            let _ = shutdown.send(());
-        }
-    }
-}
 
 const CAST: &str = "Kitchen Home";
 
@@ -98,7 +58,7 @@ fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
     let root = PathBuf::from("/Users/lopopolo/Downloads/test");
-    let config = Config::new(Duration::new(10, 0), 3, root);
+    let config = AppConfig { duration: Duration::new(10, 0), iterations: 3 };
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
     let player = match player {
         Some(player) => player,
@@ -107,7 +67,7 @@ fn main() {
             ::std::process::exit(1);
         }
     };
-    let playlist = playlist::Playlist::from_directory(&config);
+    let playlist = playlist::Playlist::from_directory(&root, &config);
     let (client, chan) = match Device::connect(player, playlist.registry(), &mut rt) {
         Ok(connect) => connect,
         Err(err) => {
@@ -116,47 +76,9 @@ fn main() {
             ::std::process::exit(1);
         }
     };
-    let (trigger, shutdown) = oneshot::channel::<()>();
-    let mut game = Game {
-        playlist,
-        client,
-        connect: None,
-        session: None,
-        config,
-        shutdown: Some(trigger),
-    };
+    let (mut controller, shutdown) = AppController::new(config, playlist, client);
     let play_loop = drain(chan, shutdown.map_err(|_| ()))
-        .for_each(move |message| {
-            match message {
-                Status::Connected(connect) => {
-                    game.connect = Some(*connect);
-                    game.load_next();
-                }
-                Status::MediaConnected(session) => {
-                    game.session = Some(*session);
-                    game.play();
-                }
-                Status::MediaStatus(status) => {
-                    let advance = status.current_time > game.config.duration.as_fractional_secs()
-                        && game.session.is_some();
-                    if advance {
-                        info!("Time limit reached. Advancing game");
-                        match game.load_next() {
-                            Some(cursor) => {
-                                game.session = None;
-                                info!("Advancing to track {}", cursor);
-                            }
-                            None => {
-                                warn!("No more tracks. Shutting down");
-                                game.shutdown();
-                            }
-                        }
-                    }
-                }
-                message => warn!("Got unknown message: {:?}", message),
-            };
-            Ok(())
-        })
+        .for_each(move |event| controller.handle(event))
         .into_future();
     rt.spawn(play_loop);
     rt.shutdown_on_idle().wait().unwrap();
