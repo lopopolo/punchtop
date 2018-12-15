@@ -19,8 +19,6 @@ extern crate neguse_taglib;
 extern crate neguse_types;
 #[macro_use]
 extern crate nom;
-#[macro_use]
-extern crate objc;
 extern crate openssl;
 extern crate protobuf;
 extern crate rand;
