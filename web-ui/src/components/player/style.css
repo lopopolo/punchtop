@@ -1,0 +1,63 @@
+.cover {
+  height: auto;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+}
+
+.metadata {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title {
+  font-weight: bold;
+}
+
+.artist {
+  font-size: 0.95em;
+  color: gray;
+}
+
+.player {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.scrubber {
+  height: 5px;
+  width: 100%;
+  display: flex;
+  align-items: left;
+  justify-content: left;
+  flex-direction: row;
+}
+
+.elapsed {
+  height: 3px;
+  background-color: rgb(40, 220, 220);
+}
+
+.remaining {
+  height: 3px;
+  width: 100%;
+  flex: 1;
+  background-color: gray;
+}
+
+.toggle {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+}

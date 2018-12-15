@@ -1,46 +1,31 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import { applyMiddleware, compose, createStore } from "redux";
+import { createBrowserHistory } from "history";
+import { routerMiddleware } from "connected-react-router";
+import { Provider } from "react-redux";
 
-import {PlayerIcon} from "react-player-controls";
+import rootReducer from "./reducer";
+import App from "./app";
+import Root from "./components/root";
 
-import './root.css';
-import style from "./player.css";
+const history = createBrowserHistory();
 
-const ElapsedBar = ({ elapsed, duration }) => (
-  <div className={style.mediaScrubber}>
-    <div className={style.mediaScrubberElapsed} style={{width: `${100* elapsed / duration}%`}} />
-    <div className={style.mediaScrubberFill} />
-  </div>
+const composeEnhancer = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
+const store = createStore(
+  rootReducer(history),
+  composeEnhancer(applyMiddleware(routerMiddleware(history)))
 );
 
-const Spacer = ({ height }) => <div style={{height}} />
+const render = () => {
+  ReactDOM.render(
+    <Root>
+      <Provider store={store}>
+        <App history={history} />
+      </Provider>
+    </Root>,
+    document.getElementById("app")
+  );
+};
 
-const Root = ({ children }) => <div>
-    <div className={style.bg} />
-    <div className={style.dim} />
-    <div className={style.root}>
-      <div className={style.container}>
-        {children}
-      </div>
-    </div>
-  </div>;
-
-const Mock = () => <div>
-    <div className={style.title}>Punchtop</div>
-    <Spacer height="1.5em" />
-    <img alt="Dillon Francis - When We Were Young album cover" className={style.cover} width="600" height="600" src="http://0.0.0.0:8000/es0r5Icy.jpg" />
-    <Spacer height="1.5em" />
-    <div className={style.metadata}>
-      <div className={style.metadataTitle}>When We Were Young</div>
-      <Spacer height="0.5em" />
-      <div className={style.metadataArtist}>Dillon Francis</div>
-    </div>
-    <Spacer height="1.5em" />
-    <div className={style.mediaPlayer}>
-      <ElapsedBar elapsed={13.2} duration={20} />
-      <Spacer height="1em" />
-      <PlayerIcon.Play width={32} height={32} fill="lightgray" />
-    </div>
-  </div>;
-
-ReactDOM.render(<Root><Mock /></Root>, document.getElementById("app"));
+render();

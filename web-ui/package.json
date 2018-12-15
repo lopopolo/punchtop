@@ -28,13 +28,19 @@
     "webpack-dev-server": "^3.1.10"
   },
   "dependencies": {
+    "connected-react-router": "^6.0.0",
+    "history": "^4.7.2",
     "react": "^16.6.3",
     "react-dom": "^16.6.3",
-    "react-player-controls": "^1.0.0-beta.0"
+    "react-player-controls": "^1.0.0-beta.0",
+    "react-redux": "^6.0.0",
+    "react-router": "^4.3.1",
+    "react-router-dom": "^4.3.1",
+    "redux": "^4.0.1"
   },
   "scripts": {
     "dev": "webpack-dev-server --mode development --open",
     "lint": "eslint src/ --fix",
-    "lint-css": "prettier --write src/*.css"
+    "format": "prettier --write src/*"
   }
 }
