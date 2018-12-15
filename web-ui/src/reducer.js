@@ -18,13 +18,16 @@ const reducer = (state = {}, action) => {
       return Object.assign({}, state, { player });
     }
     case SET_PLAYLIST: {
+      const player = Object.assign({}, state.player, {
+        current: action.initial
+      });
       const source = Object.assign({}, state.config.source, {
         name: action.name
       });
       const config = Object.assign({}, state.config, {
         source
       });
-      return Object.assign({}, state, { config });
+      return Object.assign({}, state, { config, player });
     }
     case TOGGLE_PLAYBACK: {
       const player = Object.assign({}, state.player, {

@@ -16,8 +16,8 @@ export function setMedia(media) {
   return { type: SET_MEDIA, media };
 }
 
-export function setPlaylist(name) {
-  return { type: SET_PLAYLIST, name };
+export function setPlaylist(name, initial) {
+  return { type: SET_PLAYLIST, name, initial };
 }
 
 export function togglePlayback() {

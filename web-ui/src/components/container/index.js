@@ -1,3 +1,4 @@
+import dig from "object-dig";
 import React from "react";
 import { connect } from "react-redux";
 
@@ -14,7 +15,7 @@ const Container = ({ sourceName, children }) => (
 );
 
 const mapStateToProps = state => ({
-  sourceName: state.punchtop.config.source.name,
+  sourceName: dig(state.punchtop.config, "source", "name"),
 });
 
 export default connect(mapStateToProps)(Container);
