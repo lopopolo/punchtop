@@ -2,7 +2,7 @@ import clamp from "clamp";
 import { combineReducers } from "redux";
 import { connectRouter } from "connected-react-router";
 
-import { TOGGLE_PLAYBACK, SET_ELAPSED } from "./actions";
+import { TOGGLE_PLAYBACK, SET_ELAPSED, SET_PLAYLIST } from "./actions";
 
 const initialState = {
   media: {
@@ -24,6 +24,15 @@ const initialState = {
 
 function punchtop(state = initialState, action) {
   switch (action.type) {
+    case SET_PLAYLIST: {
+      const source = Object.assign({}, state.config.source, {
+        name: action.name
+      });
+      const config = Object.assign({}, state.config, {
+        source,
+      });
+      return Object.assign({}, state, { config });
+    }
     case TOGGLE_PLAYBACK: {
       const player = Object.assign({}, state.player, {
         isPlaying: !state.player.isPlaying
