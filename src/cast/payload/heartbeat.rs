@@ -5,10 +5,12 @@
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Request {
     Ping,
+    Pong,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Response {
+    Ping,
     Pong,
 }
