@@ -2,6 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::iter;
+use std::panic::catch_unwind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
@@ -15,6 +16,39 @@ use rand::{thread_rng, Rng};
 use walkdir::WalkDir;
 
 use app::AppConfig;
+
+pub mod dir;
+pub mod music;
+
+pub fn new(root: &Path, name: &str, config: &AppConfig) -> Playlist {
+    let mut vec = Vec::new();
+    let walker = WalkDir::new(root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file());
+
+    for entry in walker {
+        vec.push(PathBuf::from(entry.path()));
+    }
+
+    let mut rng = thread_rng();
+    vec.shuffle(&mut rng);
+
+    let vec: Vec<Track> = vec
+        .into_iter()
+        .take(2 * config.iterations as usize)
+        .filter(|path| is_audio_media(&path))
+        .filter(|path| is_sufficient_duration(&path, config.duration))
+        .map(Track::new)
+        .collect();
+
+    Playlist {
+        name: name.to_owned(),
+        tracks: VecDeque::from(vec),
+        iterations: config.iterations,
+        cursor: 0,
+    }
+}
 
 // https://developers.google.com/cast/docs/media#audio_codecs
 fn is_audio_media(path: &Path) -> bool {
@@ -32,10 +66,18 @@ fn is_audio_media(path: &Path) -> bool {
 fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
     let mime: &str = &tree_magic::from_filepath(path);
     match mime {
-        "audio/mpeg" | "audio/mp3" => mp3_duration::from_path(path)
-            .ok()
-            .and_then(|duration| duration.checked_sub(required_duration))
-            .is_some(),
+        "audio/mpeg" | "audio/mp3" => {
+            let ok = catch_unwind(|| {
+                mp3_duration::from_path(path)
+                    .ok()
+                    .and_then(|duration| duration.checked_sub(required_duration))
+                    .is_some()
+            });
+            match ok {
+                Ok(ok) => ok,
+                Err(_) => false,
+            }
+        }
         "audio/aac" | "audio/mp4" => {
             let mut fd = match File::open(path) {
                 Ok(fd) => fd,
@@ -69,7 +111,7 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct Track {
-    pub path: PathBuf, // TODO: Make this private
+    path: PathBuf,
     id: String,
 }
 
@@ -106,32 +148,15 @@ impl Track {
 
 #[derive(Debug)]
 pub struct Playlist {
+    name: String,
     tracks: VecDeque<Track>,
     iterations: u64,
     cursor: u64,
 }
 
 impl Playlist {
-    pub fn from_directory(root: &Path, config: &AppConfig) -> Self {
-        let mut vec = Vec::new();
-        let walker = WalkDir::new(root)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-            .filter(|e| is_audio_media(e.path()))
-            .filter(|e| is_sufficient_duration(e.path(), config.duration));
-        for entry in walker {
-            vec.push(Track::new(PathBuf::from(entry.path())));
-        }
-
-        let mut rng = thread_rng();
-        vec.shuffle(&mut rng);
-
-        Playlist {
-            tracks: VecDeque::from(vec),
-            iterations: config.iterations,
-            cursor: 0,
-        }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn registry(&self) -> HashMap<String, Track> {

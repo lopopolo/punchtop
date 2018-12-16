@@ -4,6 +4,7 @@
 extern crate base64;
 extern crate byteorder;
 extern crate bytes;
+extern crate dirs;
 extern crate env_logger;
 extern crate floating_duration;
 extern crate futures;
@@ -36,7 +37,6 @@ extern crate url;
 extern crate walkdir;
 extern crate web_view;
 
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -62,7 +62,6 @@ const CAST: &str = "Kitchen Home";
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
-    let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = AppConfig {
         duration: Duration::new(60, 0),
         iterations: 10,
@@ -75,7 +74,7 @@ fn main() {
             ::std::process::exit(1);
         }
     };
-    let playlist = playlist::Playlist::from_directory(&root, &config);
+    let playlist = playlist::fs::music::new(&config).unwrap();
     let (client, chan) = match Device::connect(player, playlist.registry(), &mut rt) {
         Ok(connect) => connect,
         Err(err) => {
@@ -104,6 +103,12 @@ fn main() {
                         webview,
                         &AppEvent::SetConfig {
                             duration: controller.config.duration.as_fractional_secs(),
+                        },
+                    );
+                    dispatch_in_webview(
+                        webview,
+                        &AppEvent::SetPlaylist {
+                            name: controller.playlist_name().to_owned(),
                         },
                     );
                     controller.signal_view_initialized();

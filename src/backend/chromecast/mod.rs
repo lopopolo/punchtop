@@ -7,7 +7,7 @@ use futures::sync::mpsc::UnboundedReceiver;
 use mdns::RecordKind;
 
 use backend::{self, Error};
-use playlist::Track;
+use playlist::fs::Track;
 
 mod media_server;
 mod parser;

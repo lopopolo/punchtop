@@ -6,7 +6,7 @@ use futures::sync::oneshot;
 
 use backend::chromecast::Device;
 use cast::{MediaConnection, ReceiverConnection, Status};
-use playlist::{Playlist, Track};
+use playlist::fs::{Playlist, Track};
 use stream::{DrainListener, DrainTrigger};
 
 pub struct AppState {
@@ -55,6 +55,10 @@ impl AppController {
 }
 
 impl AppController {
+    pub fn playlist_name(&self) -> &str {
+        self.state.playlist.name()
+    }
+
     pub fn signal_view_initialized(&mut self) {
         self.state.view_is_initialized = true;
     }
