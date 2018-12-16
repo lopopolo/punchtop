@@ -107,9 +107,9 @@ impl AppController {
         match event {
             Connected(connect) => {
                 self.state.connect = Some(*connect);
-                if let Some((_, track)) = self.load_next() {
+                if let Some((cursor, track)) = self.load_next() {
                     self.events.push(AppEvent::SetMedia {
-                        media: media(track),
+                        media: media(track, cursor),
                     });
                     self.events.push(AppEvent::SetPlayback { is_playing: true });
                 }
@@ -132,7 +132,7 @@ impl AppController {
                         self.state.session = None;
                         info!("Advancing to track {}", cursor);
                         self.events.push(AppEvent::SetMedia {
-                            media: media(track),
+                            media: media(track, cursor),
                         });
                     }
                     None => {
@@ -143,6 +143,7 @@ impl AppController {
                     }
                 }
             }
+            MediaStatus(_) => {}
             event => warn!("Got unknown app event: {:?}", event),
         }
         if !self.state.view_is_initialized {
@@ -152,7 +153,7 @@ impl AppController {
     }
 }
 
-fn media(track: Track) -> AppMedia {
+fn media(track: Track, cursor: u64) -> AppMedia {
     let cover = track.cover().map(|image| {
         let (width, height) = image
             .dimensions()
@@ -168,6 +169,7 @@ fn media(track: Track) -> AppMedia {
     });
     AppMedia {
         id: track.id().to_owned(),
+        cursor,
         artist: track.tags().and_then(|tag| tag.artist.to_option()),
         title: track.tags().and_then(|tag| tag.title.to_option()),
         cover,
@@ -194,7 +196,6 @@ pub enum AppEvent {
     },
     SetPlaylist {
         name: String,
-        initial: String,
     },
     Shutdown,
     TogglePlayback,
@@ -203,6 +204,7 @@ pub enum AppEvent {
 #[derive(Serialize, Debug)]
 pub struct AppMedia {
     id: String,
+    cursor: u64,
     artist: Option<String>,
     title: Option<String>,
     cover: Option<AppImage>,
