@@ -3,6 +3,7 @@ import { PlayerIcon } from "react-player-controls";
 import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
 import Img from "react-image";
+import dig from "object-dig";
 
 import style from "./style.css";
 import { togglePlayback } from "../../../actions";
@@ -20,7 +21,7 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
         <Img
           alt={[media.artist, media.title].filter(item => item).join(" - ")}
           className={style.cover}
-          src={[media.cover.url, cover]}
+          src={[dig(media, "cover", "url"), cover]}
         />
       </div>
     </ReactCSSTransitionReplace>
@@ -32,7 +33,7 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
     </div>
     <Spacer height="1.5em" />
     <div className={style.player}>
-      <ElapsedBar elapsed={elapsed} duration={duration} />
+      <ElapsedBar key={media.id} elapsed={elapsed} duration={duration} />
       <Spacer height="1em" />
       <button className={style.toggle} type="button" onClick={toggle}>
         {isPlaying ? (

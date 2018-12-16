@@ -10,6 +10,7 @@
 .elapsed {
   height: 3px;
   background-color: rgb(40, 220, 220);
+  transition: width 150ms ease-in-out;
 }
 
 .remaining {
@@ -17,4 +18,5 @@
   width: 100%;
   flex: 1;
   background-color: gray;
+  transition: width 150ms ease-in-out;
 }

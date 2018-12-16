@@ -27,10 +27,13 @@ const reducer = (state = {}, action) => {
       return Object.assign({}, state, { config });
     }
     case SET_MEDIA: {
+      const player = Object.assign({}, state.player, {
+        elapsed: clamp(action.elapsed || 0, 0, state.config.duration)
+      });
       const media = Object.assign({}, state.media, {
         current: action.media
       });
-      return Object.assign({}, state, { media });
+      return Object.assign({}, state, { media, player });
     }
     case SET_PLAYBACK: {
       if (action.isPlaying === state.player.isPlaying) {

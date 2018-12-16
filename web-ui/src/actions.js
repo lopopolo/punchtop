@@ -14,8 +14,8 @@ export function setElapsed(elapsed) {
   return { type: SET_ELAPSED, elapsed };
 }
 
-export function setMedia(media) {
-  return { type: SET_MEDIA, media };
+export function setMedia(media, elapsed) {
+  return { type: SET_MEDIA, media, elapsed };
 }
 
 export function setPlayback(isPlaying) {

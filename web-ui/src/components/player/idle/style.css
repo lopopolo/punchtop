@@ -1,6 +1,7 @@
 .coverContainer {
   position: relative;
   width: 100%;
+  background-color: darkgray;
 }
 
 .coverContainer:before {
