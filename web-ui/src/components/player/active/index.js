@@ -1,11 +1,9 @@
 import React from "react";
 import { PlayerIcon } from "react-player-controls";
-import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
 import Img from "react-image";
 
 import style from "./style.css";
-import { togglePlayback } from "../../../actions";
 import { ElapsedBar, Spacer } from "..";
 import cover from "../../../assets/idle-cover.png";
 
@@ -45,8 +43,4 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
   </div>
 );
 
-const mapDispatchToProps = dispatch => ({
-  toggle: () => dispatch(togglePlayback())
-});
-
-export default connect(mapDispatchToProps)(Player);
+export default Player;

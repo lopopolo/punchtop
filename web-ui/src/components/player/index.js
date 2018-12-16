@@ -5,6 +5,7 @@ import ReactCSSTransitionReplace from "react-css-transition-replace";
 import style from "./style.css";
 import Active from "./active";
 import Idle from "./idle";
+import { togglePlayback } from "../../actions";
 
 export const Spacer = ({ height }) => <div style={{ height }} />;
 
@@ -39,4 +40,11 @@ const mapStateToProps = state => ({
   duration: state.punchtop.config.duration
 });
 
-export default connect(mapStateToProps)(Player);
+const mapDispatchToProps = dispatch => ({
+  toggle: () => dispatch(togglePlayback())
+});
+
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(Player);
