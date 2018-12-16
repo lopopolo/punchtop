@@ -1,6 +1,4 @@
 import React from "react";
-import { Route, Switch } from "react-router";
-import { ConnectedRouter } from "connected-react-router";
 import lifecycle from "react-pure-lifecycle";
 
 import Container from "./components/container";
@@ -12,14 +10,10 @@ const methods = {
   }
 };
 
-const App = ({ history }) => (
-  <ConnectedRouter history={history}>
-    <Container>
-      <Switch>
-        <Route path="/" component={Player} />
-      </Switch>
-    </Container>
-  </ConnectedRouter>
+const App = () => (
+  <Container>
+    <Player />
+  </Container>
 );
 
 export default lifecycle(methods)(App);

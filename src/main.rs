@@ -62,9 +62,9 @@ const CAST: &str = "Kitchen Home";
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
-    let root = PathBuf::from("/Users/lopopolo/Downloads/keys");
+    let root = PathBuf::from("/Users/lopopolo/Downloads/test");
     let config = AppConfig {
-        duration: Duration::new(20, 0),
+        duration: Duration::new(60, 0),
         iterations: 10,
     };
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
@@ -90,14 +90,14 @@ fn main() {
     let io_controller = Arc::clone(&controller);
     let mut webview = web_view::builder()
         .title("Punchtop")
-        .content(Content::Url("http://localhost:8080/"))
+        .content(Content::Html(include_str!("../web-ui/dist/index.html")))
         .size(480, 720)
         .resizable(false)
         .debug(true)
         .user_data(())
         .invoke_handler(move |webview, arg| {
             let mut controller = handler_controller.lock().map_err(|_| Error::Dispatch)?;
-            warn!("webview invoke arg: {}", arg);
+            info!("webview invoke handler {}", arg);
             match arg {
                 "init" => {
                     dispatch_in_webview(
@@ -116,25 +116,14 @@ fn main() {
         })
         .build()
         .unwrap();
-    let _ = webview.set_color((15, 55, 55));
+    webview.set_color((15, 55, 55));
     let ui_handle = webview.handle();
     let play_loop = drain(chan, shutdown.map_err(|_| ()))
         .for_each(move |event| {
             let mut controller = io_controller.lock().map_err(|_| ())?;
-            let mut shutdown = false;
             for event in controller.handle(event) {
-                match event {
-                    AppEvent::Shutdown => shutdown = true,
-                    _ => {}
-                };
                 let _ = ui_handle.dispatch(move |webview| {
                     dispatch_in_webview(webview, &event);
-                    Ok(())
-                });
-            }
-            if shutdown {
-                let _ = ui_handle.dispatch(|webview| {
-                    webview.terminate();
                     Ok(())
                 });
             }
@@ -142,8 +131,27 @@ fn main() {
         })
         .into_future();
     rt.spawn(play_loop);
-    webview.run().unwrap();
+    loop {
+        match webview.step() {
+            Some(Ok(_)) => (),
+            Some(Err(e)) => warn!("Error in webview runloop: {:?}", e),
+            None => break,
+        }
+        let shutdown = controller
+            .lock()
+            .ok()
+            .map(|controller| controller.is_shutting_down())
+            .unwrap_or(false);
+        if shutdown {
+            debug!("Shutting down webview runloop");
+            break;
+        }
+    }
+    debug!("webview runloop completed");
+    webview.terminate();
+    debug!("webview terminated");
     rt.shutdown_on_idle().wait().unwrap();
+    debug!("tokio runloop completed");
 }
 
 fn dispatch_in_webview(webview: &mut WebView<()>, event: &AppEvent) {

@@ -3,7 +3,6 @@ import { PlayerIcon } from "react-player-controls";
 import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
 import Img from "react-image";
-import dig from "object-dig";
 
 import style from "./style.css";
 import { togglePlayback } from "../../../actions";
@@ -21,7 +20,7 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
         <Img
           alt={[media.artist, media.title].filter(item => item).join(" - ")}
           className={style.cover}
-          src={[dig(media, "cover", "url"), cover]}
+          src={[media.cover && media.cover.url, cover]}
         />
       </div>
     </ReactCSSTransitionReplace>
@@ -46,18 +45,8 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
   </div>
 );
 
-const mapStateToProps = state => ({
-  media: state.punchtop.media.current,
-  isPlaying: state.punchtop.player.isPlaying,
-  elapsed: state.punchtop.player.elapsed,
-  duration: state.punchtop.config.duration
-});
-
 const mapDispatchToProps = dispatch => ({
   toggle: () => dispatch(togglePlayback())
 });
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(Player);
+export default connect(mapDispatchToProps)(Player);

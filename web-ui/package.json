@@ -21,6 +21,7 @@
     "eslint-plugin-prettier": "^3.0.0",
     "eslint-plugin-react": "^7.11.1",
     "file-loader": "^2.0.0",
+    "html-webpack-inline-source-plugin": "^0.0.10",
     "html-webpack-plugin": "^3.2.0",
     "prettier": "^1.15.3",
     "style-loader": "^0.23.1",
@@ -31,8 +32,6 @@
   },
   "dependencies": {
     "clamp": "^1.0.1",
-    "connected-react-router": "^6.0.0",
-    "history": "^4.7.2",
     "object-dig": "^0.1.3",
     "react": "^16.6.3",
     "react-css-transition-replace": "^3.0.3",
@@ -41,12 +40,11 @@
     "react-player-controls": "^1.0.0-beta.0",
     "react-pure-lifecycle": "^3.0.0",
     "react-redux": "^6.0.0",
-    "react-router": "^4.3.1",
-    "react-router-dom": "^4.3.1",
     "redux": "^4.0.1"
   },
   "scripts": {
     "dev": "webpack-dev-server --mode development --open",
+    "dist": "webpack --mode production",
     "lint": "eslint --fix src/**/*.js",
     "fmt": "prettier --write src/**/*.{css,js}"
   }

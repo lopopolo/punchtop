@@ -16,6 +16,7 @@ pub struct AppState {
     session: Option<MediaConnection>,
     shutdown: Option<DrainTrigger>,
     view_is_initialized: bool,
+    is_shutting_down: bool,
 }
 
 pub struct AppConfig {
@@ -39,6 +40,7 @@ impl AppController {
             session: None,
             shutdown: Some(trigger),
             view_is_initialized: false,
+            is_shutting_down: false,
         };
         let events = vec![];
         (
@@ -55,6 +57,10 @@ impl AppController {
 impl AppController {
     pub fn signal_view_initialized(&mut self) {
         self.state.view_is_initialized = true;
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.state.is_shutting_down
     }
 
     fn load_next(&mut self) -> Option<(u64, Track)> {
@@ -88,24 +94,25 @@ impl AppController {
         if let Some(shutdown) = self.state.shutdown.take() {
             let _ = shutdown.send(());
         }
+        self.state.is_shutting_down = true;
     }
 }
 
 impl AppController {
     pub fn handle(&mut self, event: Status) -> Vec<AppEvent> {
         use cast::Status::*;
-        if self.events.len() > 0 {
+        if !self.events.is_empty() {
             debug!("AppEvents backlog of {} events", self.events.len());
         }
         match event {
             Connected(connect) => {
                 self.state.connect = Some(*connect);
-                self.load_next().map(|(_, track)| {
+                if let Some((_, track)) = self.load_next() {
                     self.events.push(AppEvent::SetMedia {
                         media: media(track),
                     });
                     self.events.push(AppEvent::SetPlayback { is_playing: true });
-                });
+                }
             }
             MediaConnected(session) => {
                 self.state.session = Some(*session);
@@ -130,9 +137,9 @@ impl AppController {
                     }
                     None => {
                         warn!("No more tracks. Shutting down");
-                        self.shutdown();
                         self.events.push(AppEvent::ClearMedia);
                         self.events.push(AppEvent::Shutdown);
+                        self.shutdown();
                     }
                 }
             }
@@ -155,7 +162,7 @@ fn media(track: Track) -> AppMedia {
         let bytes = base64::encode_config(&image.unwrap(), base64::URL_SAFE);
         AppImage {
             url: format!("data:{};base64,{}", mime, bytes),
-            height: height,
+            height,
             width,
         }
     });

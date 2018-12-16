@@ -1,6 +1,5 @@
 import React from "react";
 import { PlayerIcon } from "react-player-controls";
-import { connect } from "react-redux";
 
 import style from "./style.css";
 import { ElapsedBar, Spacer } from "..";
@@ -34,8 +33,4 @@ const Player = ({ duration }) => (
   </div>
 );
 
-const mapStateToProps = state => ({
-  duration: state.punchtop.config.duration
-});
-
-export default connect(mapStateToProps)(Player);
+export default Player;

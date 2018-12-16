@@ -1,6 +1,5 @@
 import clamp from "clamp";
 import { combineReducers } from "redux";
-import { connectRouter } from "connected-react-router";
 
 import {
   CLEAR_MEDIA,
@@ -18,7 +17,10 @@ const reducer = (state = {}, action) => {
       const media = Object.assign({}, state.media, {
         current: null
       });
-      return Object.assign({}, state, { media });
+      const player = Object.assign({}, state.player, {
+        elapsed: clamp(0, 0, state.config.duration)
+      });
+      return Object.assign({}, state, { media, player });
     }
     case SET_CONFIG: {
       const config = Object.assign({}, state.config, {
@@ -72,10 +74,9 @@ const reducer = (state = {}, action) => {
   }
 };
 
-const rootReducer = history =>
+const rootReducer = () =>
   combineReducers({
-    punchtop: reducer,
-    router: connectRouter(history)
+    punchtop: reducer
   });
 
 export default rootReducer;
