@@ -15,6 +15,7 @@ pub struct AppState {
     connect: Option<ReceiverConnection>,
     session: Option<MediaConnection>,
     shutdown: Option<DrainTrigger>,
+    view_is_initialized: bool,
 }
 
 pub struct AppConfig {
@@ -23,8 +24,9 @@ pub struct AppConfig {
 }
 
 pub struct AppController {
-    config: AppConfig,
+    pub config: AppConfig,
     state: AppState,
+    events: Vec<AppEvent>,
 }
 
 impl AppController {
@@ -36,12 +38,25 @@ impl AppController {
             connect: None,
             session: None,
             shutdown: Some(trigger),
+            view_is_initialized: false,
         };
-        (Self { config, state }, listener)
+        let events = vec![];
+        (
+            Self {
+                config,
+                state,
+                events,
+            },
+            listener,
+        )
     }
 }
 
 impl AppController {
+    pub fn signal_view_initialized(&mut self) {
+        self.state.view_is_initialized = true;
+    }
+
     fn load_next(&mut self) -> Option<(u64, Track)> {
         let connect = match self.state.connect {
             Some(ref connect) => connect,
@@ -77,50 +92,56 @@ impl AppController {
 }
 
 impl AppController {
-    pub fn handle(&mut self, event: Status) -> Option<AppEvent> {
+    pub fn handle(&mut self, event: Status) -> Vec<AppEvent> {
         use cast::Status::*;
+        if self.events.len() > 0 {
+            debug!("AppEvents backlog of {} events", self.events.len());
+        }
         match event {
             Connected(connect) => {
                 self.state.connect = Some(*connect);
-                self.load_next().map(|(_, track)| AppEvent::SetMedia {
-                    media: media(track),
-                })
+                self.load_next().map(|(_, track)| {
+                    self.events.push(AppEvent::SetMedia {
+                        media: media(track),
+                    });
+                    self.events.push(AppEvent::SetPlayback { is_playing: true });
+                });
             }
             MediaConnected(session) => {
                 self.state.session = Some(*session);
                 self.play();
-                None
             }
-            MediaStatus(status) => {
-                if status.current_time < self.config.duration.as_fractional_secs() {
-                    return Some(AppEvent::SetElapsed {
-                        elapsed: status.current_time,
-                    });
-                }
-                if self.state.session.is_none() {
-                    return None;
-                }
+            MediaStatus(ref status)
+                if status.current_time < self.config.duration.as_fractional_secs() =>
+            {
+                self.events.push(AppEvent::SetElapsed {
+                    elapsed: status.current_time,
+                });
+            }
+            MediaStatus(_) if self.state.session.is_some() => {
                 info!("Time limit reached. Advancing game");
                 match self.load_next() {
                     Some((cursor, track)) => {
                         self.state.session = None;
                         info!("Advancing to track {}", cursor);
-                        Some(AppEvent::SetMedia {
+                        self.events.push(AppEvent::SetMedia {
                             media: media(track),
-                        })
+                        });
                     }
                     None => {
                         warn!("No more tracks. Shutting down");
                         self.shutdown();
-                        Some(AppEvent::Shutdown)
+                        self.events.push(AppEvent::ClearMedia);
+                        self.events.push(AppEvent::Shutdown);
                     }
                 }
             }
-            event => {
-                warn!("Got unknown app event: {:?}", event);
-                None
-            }
+            event => warn!("Got unknown app event: {:?}", event),
         }
+        if !self.state.view_is_initialized {
+            return vec![];
+        }
+        std::mem::replace(&mut self.events, vec![])
     }
 }
 
@@ -148,6 +169,7 @@ fn media(track: Track) -> AppMedia {
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+#[allow(dead_code)]
 pub enum AppEvent {
     ClearMedia,
     SetConfig {

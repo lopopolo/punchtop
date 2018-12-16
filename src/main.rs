@@ -40,6 +40,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use floating_duration::TimeAsFloat;
 use futures::prelude::*;
 use futures::Stream;
 use serde_json::to_string;
@@ -61,9 +62,9 @@ const CAST: &str = "Kitchen Home";
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
-    let root = PathBuf::from("/Users/lopopolo/Downloads/test");
+    let root = PathBuf::from("/Users/lopopolo/Downloads/keys");
     let config = AppConfig {
-        duration: Duration::new(60, 0),
+        duration: Duration::new(20, 0),
         iterations: 10,
     };
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
@@ -94,10 +95,19 @@ fn main() {
         .resizable(false)
         .debug(true)
         .user_data(())
-        .invoke_handler(move |_webview, arg| {
-            let controller = handler_controller.lock().map_err(|_| Error::Dispatch)?;
+        .invoke_handler(move |webview, arg| {
+            let mut controller = handler_controller.lock().map_err(|_| Error::Dispatch)?;
             warn!("webview invoke arg: {}", arg);
             match arg {
+                "init" => {
+                    dispatch_in_webview(
+                        webview,
+                        &AppEvent::SetConfig {
+                            duration: controller.config.duration.as_fractional_secs(),
+                        },
+                    );
+                    controller.signal_view_initialized();
+                }
                 "play" => controller.play(),
                 "pause" => controller.pause(),
                 _ => unimplemented!(),
@@ -111,46 +121,37 @@ fn main() {
     let play_loop = drain(chan, shutdown.map_err(|_| ()))
         .for_each(move |event| {
             let mut controller = io_controller.lock().map_err(|_| ())?;
-            match controller.handle(event) {
-                Some(AppEvent::Shutdown) => {
-                    if let Ok(json) = to_string(&AppEvent::ClearMedia) {
-                        let _ = ui_handle.dispatch(move |webview| {
-                            let eval = format!("store.dispatch({})", json);
-                            let _ = webview.eval(&eval);
-                            webview.terminate();
-                            Ok(())
-                        });
-                    }
-                }
-                Some(ref event @ AppEvent::SetMedia { .. }) => {
-                    if let Ok(json) = to_string(event) {
-                        let _ = ui_handle.dispatch(move |webview| {
-                            let eval = format!("store.dispatch({})", json);
-                            webview.eval(&eval)
-                        });
-                    }
-                    if let Ok(json) = to_string(&AppEvent::SetPlayback { is_playing: true }) {
-                        let _ = ui_handle.dispatch(move |webview| {
-                            let eval = format!("store.dispatch({})", json);
-                            webview.eval(&eval)
-                        });
-                    }
-                }
-                Some(ref event @ AppEvent::SetElapsed { .. }) => {
-                    if let Ok(json) = to_string(event) {
-                        let _ = ui_handle.dispatch(move |webview| {
-                            let eval = format!("store.dispatch({})", json);
-                            webview.eval(&eval)
-                        });
-                    }
-                }
-                Some(event) => warn!("Unknown app ui event: {:?}", event),
-                None => (),
-            };
+            let mut shutdown = false;
+            for event in controller.handle(event) {
+                match event {
+                    AppEvent::Shutdown => shutdown = true,
+                    _ => {}
+                };
+                let _ = ui_handle.dispatch(move |webview| {
+                    dispatch_in_webview(webview, &event);
+                    Ok(())
+                });
+            }
+            if shutdown {
+                let _ = ui_handle.dispatch(|webview| {
+                    webview.terminate();
+                    Ok(())
+                });
+            }
             Ok(())
         })
         .into_future();
     rt.spawn(play_loop);
     webview.run().unwrap();
     rt.shutdown_on_idle().wait().unwrap();
+}
+
+fn dispatch_in_webview(webview: &mut WebView<()>, event: &AppEvent) {
+    let eval = to_string(event).map(|json| {
+        let eval = format!("store.dispatch({})", json);
+        webview.eval(&eval)
+    });
+    if let Err(err) = eval {
+        warn!("err in webview eval: {:?}", err);
+    }
 }
