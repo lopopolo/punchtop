@@ -3,6 +3,7 @@ import { combineReducers } from "redux";
 
 import {
   CLEAR_MEDIA,
+  SET_ACTIVE_DEVICE,
   SET_CONFIG,
   SET_ELAPSED,
   SET_MEDIA,
@@ -21,6 +22,13 @@ const reducer = (state = {}, action) => {
         elapsed: clamp(0, 0, state.config.duration)
       });
       return Object.assign({}, state, { media, player });
+    }
+    case SET_ACTIVE_DEVICE: {
+      const config = Object.assign({}, state.device, {
+        kind: action.kind,
+        name: action.name
+      });
+      return Object.assign({}, state, { config });
     }
     case SET_CONFIG: {
       const config = Object.assign({}, state.config, {

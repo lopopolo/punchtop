@@ -22,16 +22,16 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
         />
       </div>
     </ReactCSSTransitionReplace>
-    <Spacer height="1.5em" />
+    <Spacer height="0.75em" />
     <div className={style.metadata}>
       <div className={style.title}>{media.title}</div>
-      <Spacer height="0.5em" />
+      <Spacer height="0.4em" />
       <div className={style.artist}>{media.artist}</div>
     </div>
-    <Spacer height="1.5em" />
+    <Spacer height="0.75em" />
     <div className={style.player}>
       <ElapsedBar key={media.id} elapsed={elapsed} duration={duration} />
-      <Spacer height="1em" />
+      <Spacer height="0.75em" />
       <button className={style.toggle} type="button" onClick={toggle}>
         {isPlaying ? (
           <PlayerIcon.Pause width={32} height={32} fill="lightgray" />

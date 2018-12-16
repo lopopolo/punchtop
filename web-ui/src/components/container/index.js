@@ -3,6 +3,7 @@ import React from "react";
 import { connect } from "react-redux";
 
 import style from "./style.css";
+import DeviceDrawer from "../device-drawer";
 
 const Container = ({ sourceName, cursor, children }) => (
   <div className={style.container}>
@@ -11,6 +12,7 @@ const Container = ({ sourceName, cursor, children }) => (
       <div className={style.sourceName}>{sourceName}</div>
     </div>
     {children}
+    <DeviceDrawer />
   </div>
 );
 

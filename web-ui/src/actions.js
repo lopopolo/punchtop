@@ -1,10 +1,15 @@
 export const CLEAR_MEDIA = "CLEAR_MEDIA";
+export const SET_ACTIVE_DEVICE = "SET_ACTIVE_DEVICE";
 export const SET_CONFIG = "SET_CONFIG";
 export const SET_ELAPSED = "SET_ELAPSED";
 export const SET_MEDIA = "SET_MEDIA";
 export const SET_PLAYBACK = "SET_PLAYBACK";
 export const SET_PLAYLIST = "SET_PLAYLIST";
 export const TOGGLE_PLAYBACK = "TOGGLE_PLAYBACK";
+
+export function setActiveDevice(kind, name) {
+  return { type: SET_ACTIVE_DEVICE, kind, name };
+}
 
 export function setConfig(duration) {
   return { type: SET_ELAPSED, duration };
