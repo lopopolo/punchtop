@@ -40,6 +40,15 @@ pub fn load(
     Ok(message(&connect.transport, payload))
 }
 
+pub fn pause(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
+    let payload = to_string(&Request::Pause {
+        request_id,
+        media_session_id: connect.session,
+        custom_data: CustomData::default(),
+    })?;
+    Ok(message(&connect.receiver.transport, payload))
+}
+
 pub fn play(request_id: i64, connect: &MediaConnection) -> Result<CastMessage, Error> {
     let payload = to_string(&Request::Play {
         request_id,

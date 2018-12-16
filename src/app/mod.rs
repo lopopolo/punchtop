@@ -53,7 +53,13 @@ impl AppController {
         })
     }
 
-    fn play(&self) {
+    pub fn pause(&self) {
+        if let Some(ref session) = self.state.session {
+            let _ = self.state.client.pause(session);
+        };
+    }
+
+    pub fn play(&self) {
         if let Some(ref session) = self.state.session {
             let _ = self.state.client.play(session);
         };
@@ -147,6 +153,8 @@ pub enum AppEvent {
     SetConfig { duration: f64 },
     SetElapsed { elapsed: f64 },
     SetMedia { media: AppMedia },
+    #[serde(rename_all = "camelCase")]
+    SetPlayback { is_playing: bool },
     SetPlaylist { name: String, initial: String },
     Shutdown,
     TogglePlayback,

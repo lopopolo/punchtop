@@ -80,6 +80,11 @@ impl Device {
         Ok(())
     }
 
+    pub fn pause(&self, connect: &cast::MediaConnection) -> backend::Result {
+        self.cast.pause(connect);
+        Ok(())
+    }
+
     pub fn play(&self, connect: &cast::MediaConnection) -> backend::Result {
         self.cast.play(connect);
         Ok(())

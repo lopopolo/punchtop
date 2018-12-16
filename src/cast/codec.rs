@@ -63,6 +63,7 @@ impl Encoder for CastMessageCodec {
                 message::media::load(self.request_id, &connect, *media)
             }
             Command::MediaStatus(connect) => message::media::status(self.request_id, &connect),
+            Command::Pause(ref connect) => message::media::pause(self.request_id, &connect),
             Command::Play(ref connect) => message::media::play(self.request_id, &connect),
             Command::ReceiverStatus => message::receiver::status(self.request_id),
             Command::Stop(ref connect) => message::media::stop(self.request_id, connect),

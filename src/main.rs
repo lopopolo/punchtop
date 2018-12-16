@@ -37,6 +37,7 @@ extern crate walkdir;
 extern crate web_view;
 
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::prelude::*;
@@ -82,6 +83,10 @@ fn main() {
             ::std::process::exit(1);
         }
     };
+    let (controller, shutdown) = AppController::new(config, playlist, client);
+    let controller = Arc::new(Mutex::new(controller));
+    let handler_controller = Arc::clone(&controller);
+    let io_controller = Arc::clone(&controller);
     let mut webview = web_view::builder()
         .title("Punchtop")
         .content(Content::Url("http://localhost:8080/"))
@@ -89,12 +94,12 @@ fn main() {
         .resizable(false)
         .debug(true)
         .user_data(())
-        .invoke_handler(|webview, arg| {
+        .invoke_handler(move |_webview, arg| {
+            let controller = handler_controller.lock().map_err(|_| Error::Dispatch)?;
+            warn!("webview invoke arg: {}", arg);
             match arg {
-                "toggle" => {}
-                "exit" => {
-                    webview.terminate();
-                }
+                "play" => controller.play(),
+                "pause" => controller.pause(),
                 _ => unimplemented!(),
             };
             Ok(())
@@ -103,9 +108,9 @@ fn main() {
         .unwrap();
     let _ = webview.set_color((15, 55, 55));
     let ui_handle = webview.handle();
-    let (mut controller, shutdown) = AppController::new(config, playlist, client);
     let play_loop = drain(chan, shutdown.map_err(|_| ()))
         .for_each(move |event| {
+            let mut controller = io_controller.lock().map_err(|_| ())?;
             match controller.handle(event) {
                 Some(AppEvent::Shutdown) => {
                     if let Ok(json) = to_string(&AppEvent::ClearMedia) {
@@ -119,6 +124,12 @@ fn main() {
                 }
                 Some(ref event @ AppEvent::SetMedia { .. }) => {
                     if let Ok(json) = to_string(event) {
+                        let _ = ui_handle.dispatch(move |webview| {
+                            let eval = format!("store.dispatch({})", json);
+                            webview.eval(&eval)
+                        });
+                    }
+                    if let Ok(json) = to_string(&AppEvent::SetPlayback { is_playing: true }) {
                         let _ = ui_handle.dispatch(move |webview| {
                             let eval = format!("store.dispatch({})", json);
                             webview.eval(&eval)

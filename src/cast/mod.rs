@@ -68,6 +68,10 @@ impl Chromecast {
         tokio::spawn(task);
     }
 
+    pub fn pause(&self, connect: &MediaConnection) {
+        let _ = self.command.unbounded_send(Command::Pause(connect.clone()));
+    }
+
     pub fn play(&self, connect: &MediaConnection) {
         let _ = self.command.unbounded_send(Command::Play(connect.clone()));
     }

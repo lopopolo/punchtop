@@ -7,6 +7,7 @@ import {
   SET_CONFIG,
   SET_ELAPSED,
   SET_MEDIA,
+  SET_PLAYBACK,
   SET_PLAYLIST,
   TOGGLE_PLAYBACK
 } from "./actions";
@@ -31,6 +32,16 @@ const reducer = (state = {}, action) => {
       });
       return Object.assign({}, state, { media });
     }
+    case SET_PLAYBACK: {
+      if (action.isPlaying === state.player.isPlaying) {
+        return state;
+      }
+      const player = Object.assign({}, state.player, {
+        isPlaying: action.isPlaying
+      });
+      global.external.invoke(player.isPlaying ? "play" : "pause");
+      return Object.assign({}, state, { player });
+    }
     case SET_PLAYLIST: {
       const source = Object.assign({}, state.config.source, {
         name: action.name
@@ -44,6 +55,7 @@ const reducer = (state = {}, action) => {
       const player = Object.assign({}, state.player, {
         isPlaying: !state.player.isPlaying
       });
+      global.external.invoke(player.isPlaying ? "play" : "pause");
       return Object.assign({}, state, { player });
     }
     case SET_ELAPSED: {
