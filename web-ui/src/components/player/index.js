@@ -1,6 +1,7 @@
 import React from "react";
 import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
+import format from "format-duration";
 
 import style from "./style.css";
 import Active from "./active";
@@ -10,12 +11,18 @@ import { togglePlayback } from "../../actions";
 export const Spacer = ({ height }) => <div style={{ height }} />;
 
 export const ElapsedBar = ({ elapsed, duration }) => (
-  <div className={style.scrubber}>
-    <div
-      className={style.elapsed}
-      style={{ width: `${(100 * elapsed) / duration}%` }}
-    />
-    <div className={style.remaining} />
+  <div className={style.time}>
+    <div className={style.timestamps}>
+      <div>{format(elapsed * 1000)}</div>
+      <div>{format((elapsed - duration) * 1000)}</div>
+    </div>
+    <div className={style.scrubber}>
+      <div
+        className={style.elapsed}
+        style={{ width: `${(100 * elapsed) / duration}%` }}
+      />
+      <div className={style.remaining} />
+    </div>
   </div>
 );
 

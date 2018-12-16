@@ -1,3 +1,20 @@
+.time {
+  width: 100%;
+}
+
+.timestamps {
+  width: 100%;
+  margin-bottom: 0.25em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier,
+    monospace;
+  font-size: 0.75em;
+  color: gray;
+}
+
 .scrubber {
   height: 5px;
   width: 100%;
