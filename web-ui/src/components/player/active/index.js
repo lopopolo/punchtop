@@ -9,14 +9,19 @@ import { togglePlayback } from "../../../actions";
 import { ElapsedBar, Spacer } from "..";
 import cover from "../../../assets/idle-cover.png";
 
-const Player = ({ media, isPlaying, elapsed, duration, toggle }) => <div>
+const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
+  <div>
     <ReactCSSTransitionReplace
       transitionName="cross-fade"
       transitionEnterTimeout={300}
       transitionLeaveTimeout={300}
     >
       <div key={media.id} className={style.coverContainer}>
-        <Img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} src={[media.cover.url, cover]} />
+        <Img
+          alt={[media.artist, media.title].filter(item => item).join(" - ")}
+          className={style.cover}
+          src={[media.cover.url, cover]}
+        />
       </div>
     </ReactCSSTransitionReplace>
     <Spacer height="1.5em" />
@@ -30,20 +35,28 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => <div>
       <ElapsedBar elapsed={elapsed} duration={duration} />
       <Spacer height="1em" />
       <button className={style.toggle} type="button" onClick={toggle}>
-        {isPlaying ? <PlayerIcon.Pause width={32} height={32} fill="lightgray" /> : <PlayerIcon.Play width={32} height={32} fill="lightgray" />}
+        {isPlaying ? (
+          <PlayerIcon.Pause width={32} height={32} fill="lightgray" />
+        ) : (
+          <PlayerIcon.Play width={32} height={32} fill="lightgray" />
+        )}
       </button>
     </div>
-  </div>;
+  </div>
+);
 
 const mapStateToProps = state => ({
-    media: state.punchtop.media.current,
-    isPlaying: state.punchtop.player.isPlaying,
-    elapsed: state.punchtop.player.elapsed,
-    duration: state.punchtop.config.duration,
-  });
+  media: state.punchtop.media.current,
+  isPlaying: state.punchtop.player.isPlaying,
+  elapsed: state.punchtop.player.elapsed,
+  duration: state.punchtop.config.duration
+});
 
 const mapDispatchToProps = dispatch => ({
-  toggle: () => dispatch(togglePlayback()),
-})
+  toggle: () => dispatch(togglePlayback())
+});
 
-export default connect(mapStateToProps, mapDispatchToProps)(Player);
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(Player);

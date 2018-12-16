@@ -6,9 +6,16 @@ import style from "./style.css";
 import { ElapsedBar, Spacer } from "..";
 import cover from "../../../assets/idle-cover.png";
 
-const Player = ({ duration }) => <div>
+const Player = ({ duration }) => (
+  <div>
     <div className={style.coverContainer}>
-      <img alt="Punchtop" className={style.cover} height={160} width={160} src={cover} />
+      <img
+        alt="Punchtop"
+        className={style.cover}
+        height={160}
+        width={160}
+        src={cover}
+      />
     </div>
     <Spacer height="1.5em" />
     <div className={style.metadata}>
@@ -24,10 +31,11 @@ const Player = ({ duration }) => <div>
         <PlayerIcon.Play width={32} height={32} fill="gray" />
       </button>
     </div>
-  </div>;
+  </div>
+);
 
 const mapStateToProps = state => ({
-    duration: state.punchtop.config.duration,
+  duration: state.punchtop.config.duration
 });
 
 export default connect(mapStateToProps)(Player);

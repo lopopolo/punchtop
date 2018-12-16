@@ -6,16 +6,20 @@ import style from "./style.css";
 import Active from "./active";
 import Idle from "./idle";
 
-export const Spacer = ({ height }) => <div style={{height}} />
+export const Spacer = ({ height }) => <div style={{ height }} />;
 
 export const ElapsedBar = ({ elapsed, duration }) => (
   <div className={style.scrubber}>
-    <div className={style.elapsed} style={{width: `${100 * elapsed / duration}%`}} />
+    <div
+      className={style.elapsed}
+      style={{ width: `${(100 * elapsed) / duration}%` }}
+    />
     <div className={style.remaining} />
   </div>
 );
 
-const Player = ({ active }) => <div>
+const Player = ({ active }) => (
+  <div>
     <ReactCSSTransitionReplace
       transitionName="cross-fade"
       transitionEnterTimeout={300}
@@ -25,10 +29,11 @@ const Player = ({ active }) => <div>
         {active ? <Active /> : <Idle />}
       </div>
     </ReactCSSTransitionReplace>
-  </div>;
+  </div>
+);
 
 const mapStateToProps = state => ({
-    active: !!state.punchtop.media.current,
+  active: !!state.punchtop.media.current
 });
 
 export default connect(mapStateToProps)(Player);

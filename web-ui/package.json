@@ -46,7 +46,7 @@
   },
   "scripts": {
     "dev": "webpack-dev-server --mode development --open",
-    "lint": "eslint src/ --fix",
-    "format": "prettier --write src/*"
+    "lint": "eslint --fix src/**/*.js",
+    "fmt": "prettier --write src/**/*.{css,js}"
   }
 }

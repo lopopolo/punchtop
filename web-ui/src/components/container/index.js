@@ -15,7 +15,7 @@ const Container = ({ sourceName, children }) => (
 );
 
 const mapStateToProps = state => ({
-  sourceName: dig(state.punchtop.config, "source", "name"),
+  sourceName: dig(state.punchtop.config, "source", "name")
 });
 
 export default connect(mapStateToProps)(Container);
