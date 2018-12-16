@@ -150,12 +150,23 @@ fn media(track: Track) -> AppMedia {
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AppEvent {
     ClearMedia,
-    SetConfig { duration: f64 },
-    SetElapsed { elapsed: f64 },
-    SetMedia { media: AppMedia },
+    SetConfig {
+        duration: f64,
+    },
+    SetElapsed {
+        elapsed: f64,
+    },
+    SetMedia {
+        media: AppMedia,
+    },
     #[serde(rename_all = "camelCase")]
-    SetPlayback { is_playing: bool },
-    SetPlaylist { name: String, initial: String },
+    SetPlayback {
+        is_playing: bool,
+    },
+    SetPlaylist {
+        name: String,
+        initial: String,
+    },
     Shutdown,
     TogglePlayback,
 }
