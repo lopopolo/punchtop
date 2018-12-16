@@ -2,6 +2,7 @@ import React from "react";
 import { PlayerIcon } from "react-player-controls";
 import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
+import Img from "react-image";
 
 import style from "./style.css";
 import { togglePlayback } from "../../../actions";
@@ -15,7 +16,7 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => <div>
       transitionLeaveTimeout={300}
     >
       <div key={media.id} className={style.coverContainer}>
-        {media.cover ? <img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} height={media.cover.height} width={media.cover.width} src={media.cover.url} /> : <img alt="Punchtop" className={style.cover} height={160} width={160} src={cover} />}
+        <Img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} src={[media.cover.url, cover]} />
       </div>
     </ReactCSSTransitionReplace>
     <Spacer height="1.5em" />

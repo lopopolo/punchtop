@@ -37,6 +37,7 @@
     "react": "^16.6.3",
     "react-css-transition-replace": "^3.0.3",
     "react-dom": "^16.6.3",
+    "react-image": "^1.5.1",
     "react-player-controls": "^1.0.0-beta.0",
     "react-redux": "^6.0.0",
     "react-router": "^4.3.1",
