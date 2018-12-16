@@ -1,8 +1,8 @@
 import React from "react";
 import { connect } from "react-redux";
+import ReactCSSTransitionReplace from "react-css-transition-replace";
 
 import style from "./style.css";
-import { togglePlayback } from "../../actions";
 import Active from "./active";
 import Idle from "./idle";
 
@@ -16,11 +16,19 @@ export const ElapsedBar = ({ elapsed, duration }) => (
 );
 
 const Player = ({ active }) => <div>
-    {active ? <Active /> : <Idle />}
+    <ReactCSSTransitionReplace
+      transitionName="cross-fade"
+      transitionEnterTimeout={300}
+      transitionLeaveTimeout={300}
+    >
+      <div key={active ? "active" : "idle"}>
+        {active ? <Active /> : <Idle />}
+      </div>
+    </ReactCSSTransitionReplace>
   </div>;
 
 const mapStateToProps = state => ({
-    active: !!state.punchtop.config.source,
+    active: !!state.punchtop.media.current,
 });
 
 export default connect(mapStateToProps)(Player);

@@ -6,15 +6,16 @@ import ReactCSSTransitionReplace from "react-css-transition-replace";
 import style from "./style.css";
 import { togglePlayback } from "../../../actions";
 import { ElapsedBar, Spacer } from "..";
+import cover from "../../../assets/idle-cover.png";
 
-const Player = ({ id, media, isPlaying, elapsed, duration, toggle }) => <div>
+const Player = ({ media, isPlaying, elapsed, duration, toggle }) => <div>
     <ReactCSSTransitionReplace
       transitionName="cross-fade"
       transitionEnterTimeout={300}
       transitionLeaveTimeout={300}
     >
-      <div key={id} className={style.coverContainer}>
-        <img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} height={media.cover.height} width={media.cover.width} src={media.cover.url} />
+      <div key={media.id} className={style.coverContainer}>
+        {media.cover ? <img alt={[media.artist, media.title].filter(item => item).join(" - ")} className={style.cover} height={media.cover.height} width={media.cover.width} src={media.cover.url} /> : <img alt="Punchtop" className={style.cover} height={160} width={160} src={cover} />}
       </div>
     </ReactCSSTransitionReplace>
     <Spacer height="1.5em" />
@@ -33,16 +34,12 @@ const Player = ({ id, media, isPlaying, elapsed, duration, toggle }) => <div>
     </div>
   </div>;
 
-const mapStateToProps = state => {
-  const id = state.punchtop.player.current;
-  return {
-    id,
-    media: state.punchtop.media[id],
+const mapStateToProps = state => ({
+    media: state.punchtop.media.current,
     isPlaying: state.punchtop.player.isPlaying,
     elapsed: state.punchtop.player.elapsed,
     duration: state.punchtop.config.duration,
-  }
-};
+  });
 
 const mapDispatchToProps = dispatch => ({
   toggle: () => dispatch(togglePlayback()),

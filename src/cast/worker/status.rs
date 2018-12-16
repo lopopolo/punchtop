@@ -12,7 +12,7 @@ pub fn task(
     state: Mutex<ConnectState>,
     tx: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {
-    Interval::new_interval(Duration::from_millis(50))
+    Interval::new_interval(Duration::from_millis(150))
         .map_err(|_| ())
         .and_then(move |_| state.lock())
         .map_err(|_| ())

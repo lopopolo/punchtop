@@ -9,10 +9,11 @@
       html,
       body,
       #app {
-        min-height: 100vh;
+        min-height: 100%;
         width: 100vw;
         margin: 0;
         padding: 0;
+        overflow: hidden;
       }
       .cross-fade-leave {
         opacity: 1;
@@ -35,31 +36,14 @@
     <script>
       window.PUNCHTOP = {
         media: {
-          es0r5Icy: {
-            artist: "Dillon Francis",
-            title: "When We Were Young",
-            cover: {
-              height: 600,
-              width: 600,
-              url: "http://0.0.0.0:8000/es0r5Icy.jpg"
-            }
-          },
-          "4FpLLFTy": {
-            artist: "Tame Impala",
-            cover: {
-              height: 600,
-              width: 600,
-              url: "http://0.0.0.0:8000/4FpLLFTy.jpg"
-            }
-          }
+          current: null
         },
         config: {
-          duration: 20,
-          source: null,
+          duration: 60,
+          source: null
         },
         player: {
-          current: "",
-          elapsed: 13.2,
+          elapsed: 0.0,
           isPlaying: false
         }
       };
