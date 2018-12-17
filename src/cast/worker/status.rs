@@ -13,9 +13,9 @@ pub fn task(
     tx: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::from_millis(150))
-        .map_err(|_| ())
+        .map_err(|err| warn!("Error on status interval: {:?}", err))
         .and_then(move |_| state.lock())
-        .map_err(|_| ())
+        .map_err(|err| warn!("Error on connect state lock: {:?}", err))
         .for_each(move |state| {
             let _ = tx.unbounded_send(Command::ReceiverStatus);
             if let Some(connect) = state.media_connection() {

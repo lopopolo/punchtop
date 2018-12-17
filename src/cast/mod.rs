@@ -164,7 +164,7 @@ fn writer(
     command: impl Stream<Item = Command, Error = ()>,
 ) -> impl Future<Item = (), Error = ()> {
     command
-        .forward(sink.sink_map_err(|_| ()))
+        .forward(sink.sink_map_err(|err| warn!("Error on sink recv: {:?}", err)))
         .map(|_| ())
         .map_err(|err| warn!("Error on recv: {:?}", err))
 }

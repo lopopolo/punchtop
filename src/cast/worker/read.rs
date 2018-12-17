@@ -36,7 +36,7 @@ fn read(
     command: UnboundedSender<Command>,
 ) {
     match message {
-        ChannelMessage::Heartbeat(_) => trace!("Got heartbeat"),
+        ChannelMessage::Heartbeat(message) => trace!("Got heartbeat: {:?}", message),
         ChannelMessage::Media(message) => do_media(*message, tx, connect),
         ChannelMessage::Receiver(message) => do_receiver(*message, tx, command, connect),
         payload => warn!("Got unknown payload: {:?}", payload),
