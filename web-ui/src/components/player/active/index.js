@@ -5,7 +5,7 @@ import Img from "react-image";
 
 import style from "./style.css";
 import { ElapsedBar, Spacer } from "..";
-import cover from "../../../assets/idle-cover.png";
+import fallbackCover from "../../../assets/fallback-cover.png";
 
 const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
   <div>
@@ -18,7 +18,7 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
         <Img
           alt={[media.artist, media.title].filter(item => item).join(" - ")}
           className={style.cover}
-          src={[media.cover && media.cover.url, cover]}
+          src={[media.cover && media.cover.url, fallbackCover]}
         />
       </div>
     </ReactCSSTransitionReplace>
