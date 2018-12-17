@@ -4,19 +4,25 @@ use base64;
 use floating_duration::TimeAsFloat;
 use futures::sync::oneshot;
 
-use backend::chromecast::Device;
+use backend::chromecast::{CastAddr, Device};
 use cast::{MediaConnection, ReceiverConnection, Status};
 use playlist::fs::{Playlist, Track};
 use stream::{DrainListener, DrainTrigger};
 
 pub struct AppState {
     playlist: Playlist,
-    client: Device,
+    client: Option<Device>,
     connect: Option<ReceiverConnection>,
     session: Option<MediaConnection>,
     shutdown: Option<DrainTrigger>,
-    view_is_initialized: bool,
-    is_shutting_down: bool,
+    devices: Vec<AppDevice>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum AppLifecycle {
+    Uninitialized,
+    Loaded,
+    Terminating,
 }
 
 pub struct AppConfig {
@@ -26,26 +32,27 @@ pub struct AppConfig {
 
 pub struct AppController {
     pub config: AppConfig,
+    lifecycle: AppLifecycle,
     state: AppState,
     events: Vec<AppEvent>,
 }
 
 impl AppController {
-    pub fn new(config: AppConfig, playlist: Playlist, client: Device) -> (Self, DrainListener) {
+    pub fn new(config: AppConfig, playlist: Playlist) -> (Self, DrainListener) {
         let (trigger, listener) = oneshot::channel();
         let state = AppState {
             playlist,
-            client,
+            client: None,
             connect: None,
             session: None,
             shutdown: Some(trigger),
-            view_is_initialized: false,
-            is_shutting_down: false,
+            devices: vec![],
         };
         let events = vec![];
         (
             Self {
                 config,
+                lifecycle: AppLifecycle::Uninitialized,
                 state,
                 events,
             },
@@ -55,50 +62,74 @@ impl AppController {
 }
 
 impl AppController {
+    pub fn set_devices(&mut self, devices: Vec<AppDevice>) {
+        std::mem::replace(&mut self.state.devices, devices);
+    }
+
+    pub fn devices(&self) -> &[AppDevice] {
+        &self.state.devices
+    }
+
+    pub fn set_client(&mut self, client: Device) {
+        if let Some(mut old) = std::mem::replace(&mut self.state.client, Some(client)) {
+            let _ = old.shutdown();
+        }
+    }
+
     pub fn playlist_name(&self) -> &str {
         self.state.playlist.name()
     }
+}
 
-    pub fn signal_view_initialized(&mut self) {
-        self.state.view_is_initialized = true;
+// View lifecyle
+impl AppController {
+    pub fn view_did_load(&mut self) {
+        self.lifecycle = AppLifecycle::Loaded;
     }
 
-    pub fn is_shutting_down(&self) -> bool {
-        self.state.is_shutting_down
+    pub fn view_lifecycle(&self) -> &AppLifecycle {
+        &self.lifecycle
     }
+}
 
+// Playback controls
+impl AppController {
     fn load_next(&mut self) -> Option<(u64, Track)> {
-        let connect = match self.state.connect {
-            Some(ref connect) => connect,
-            None => return None,
-        };
+        let client = self.state.client.as_ref()?;
+        let connect = self.state.connect.as_ref()?;
         self.state.playlist.next().map(|(cursor, track)| {
-            let _ = self.state.client.load(connect, &track);
+            let _ = client.load(&connect, &track);
             (cursor, track)
         })
     }
 
     pub fn pause(&self) {
-        if let Some(ref session) = self.state.session {
-            let _ = self.state.client.pause(session);
-        };
+        if let Some(ref client) = self.state.client {
+            if let Some(ref session) = self.state.session {
+                let _ = client.pause(session);
+            }
+        }
     }
 
     pub fn play(&self) {
-        if let Some(ref session) = self.state.session {
-            let _ = self.state.client.play(session);
-        };
+        if let Some(ref client) = self.state.client {
+            if let Some(ref session) = self.state.session {
+                let _ = client.play(session);
+            }
+        }
     }
 
     fn shutdown(&mut self) {
-        if let Some(ref session) = self.state.session {
-            let _ = self.state.client.stop(session);
+        if let Some(ref mut client) = self.state.client {
+            if let Some(ref session) = self.state.session {
+                let _ = client.stop(session);
+            }
+            let _ = client.shutdown();
         }
-        let _ = self.state.client.shutdown();
         if let Some(shutdown) = self.state.shutdown.take() {
             let _ = shutdown.send(());
         }
-        self.state.is_shutting_down = true;
+        self.lifecycle = AppLifecycle::Terminating;
     }
 }
 
@@ -150,7 +181,7 @@ impl AppController {
             MediaStatus(_) => {}
             event => warn!("Got unknown app event: {:?}", event),
         }
-        if !self.state.view_is_initialized {
+        if self.lifecycle == AppLifecycle::Uninitialized {
             return vec![];
         }
         std::mem::replace(&mut self.events, vec![])
@@ -219,4 +250,19 @@ pub struct AppImage {
     url: String,
     height: u32,
     width: u32,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AppDevice {
+    Cast {
+        name: String,
+        is_connected: bool,
+        #[serde(skip_serializing)]
+        connect: CastAddr,
+    },
+    Local {
+        name: String,
+        is_connected: bool,
+    },
 }

@@ -52,7 +52,7 @@ pub struct Device {
 
 impl Device {
     pub fn connect(
-        config: CastAddr,
+        config: &CastAddr,
         registry: HashMap<String, Track>,
         rt: &mut tokio::runtime::Runtime,
     ) -> Result<(Self, UnboundedReceiver<cast::Status>), backend::Error> {

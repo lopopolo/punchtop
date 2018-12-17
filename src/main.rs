@@ -53,7 +53,7 @@ mod cast;
 mod playlist;
 mod stream;
 
-use app::{AppConfig, AppController, AppEvent};
+use app::{AppConfig, AppController, AppEvent, AppLifecycle};
 use backend::chromecast::Device;
 use stream::drain;
 
@@ -75,7 +75,7 @@ fn main() {
         }
     };
     let playlist = playlist::fs::music::new(&config).unwrap();
-    let (client, chan) = match Device::connect(player, playlist.registry(), &mut rt) {
+    let (client, chan) = match Device::connect(&player, playlist.registry(), &mut rt) {
         Ok(connect) => connect,
         Err(err) => {
             warn!("chromecast connect error: {:?}", err);
@@ -83,7 +83,8 @@ fn main() {
             ::std::process::exit(1);
         }
     };
-    let (controller, shutdown) = AppController::new(config, playlist, client);
+    let (mut controller, shutdown) = AppController::new(config, playlist);
+    controller.set_client(client);
     let controller = Arc::new(Mutex::new(controller));
     let handler_controller = Arc::clone(&controller);
     let io_controller = Arc::clone(&controller);
@@ -111,7 +112,7 @@ fn main() {
                             name: controller.playlist_name().to_owned(),
                         },
                     );
-                    controller.signal_view_initialized();
+                    controller.view_did_load();
                 }
                 "play" => controller.play(),
                 "pause" => controller.pause(),
@@ -145,7 +146,7 @@ fn main() {
         let shutdown = controller
             .lock()
             .ok()
-            .map(|controller| controller.is_shutting_down())
+            .map(|controller| controller.view_lifecycle() == &AppLifecycle::Terminating)
             .unwrap_or(false);
         if shutdown {
             debug!("Shutting down webview runloop");
