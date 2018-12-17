@@ -33,7 +33,7 @@ pub fn load(
         request_id,
         session_id: connect.session.to_owned(),
         media,
-        current_time: 0f64,
+        current_time: 0_f64,
         custom_data: CustomData::default(),
         autoplay: true,
     })?;

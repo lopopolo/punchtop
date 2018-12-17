@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
-use floating_duration::TimeAsFloat;
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
 use rand::distributions::Alphanumeric;
@@ -15,12 +14,12 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use walkdir::WalkDir;
 
-use app::AppConfig;
+use app::Config;
 
 pub mod dir;
 pub mod music;
 
-pub fn new(root: &Path, name: &str, config: &AppConfig) -> Playlist {
+pub fn new(root: &Path, name: &str, config: &Config) -> Playlist {
     let mut vec = Vec::new();
     let walker = WalkDir::new(root)
         .into_iter()
@@ -37,9 +36,13 @@ pub fn new(root: &Path, name: &str, config: &AppConfig) -> Playlist {
     let vec: Vec<Track> = vec
         .into_iter()
         .take(2 * config.iterations as usize)
-        .filter(|path| is_audio_media(&path))
-        .filter(|path| is_sufficient_duration(&path, config.duration))
-        .map(Track::new)
+        .filter_map(|path| {
+            if is_audio_media(&path) && is_sufficient_duration(&path, config.duration) {
+                Some(Track::new(path))
+            } else {
+                None
+            }
+        })
         .collect();
 
     Playlist {
@@ -54,11 +57,8 @@ pub fn new(root: &Path, name: &str, config: &AppConfig) -> Playlist {
 fn is_audio_media(path: &Path) -> bool {
     let mime: &str = &tree_magic::from_filepath(path);
     match mime {
-        "audio/mpeg" | "audio/mp3" => true,
-        "audio/aac" | "audio/mp4" => true,
-        "audio/flac" => true,
-        "audio/ogg" | "application/ogg" => true,
-        "audio/webm" => true,
+        "audio/mpeg" | "audio/mp3" | "audio/aac" | "audio/mp4" | "audio/flac" | "audio/ogg"
+        | "application/ogg" | "audio/webm" => true,
         _ => false,
     }
 }
@@ -92,16 +92,30 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
             if mp4::read_mp4(&mut c, &mut context).is_err() {
                 return false;
             }
-            let mut valid = true;
+            let microseconds_per_second = 1_000_000;
+            let required_duration_micros = microseconds_per_second * required_duration.as_secs()
+                + u64::from(required_duration.subsec_micros());
+            let mut valid = false;
             for track in context.tracks {
                 let mut track_valid = false;
                 if let (Some(duration), Some(timescale)) = (track.duration, track.timescale) {
-                    if timescale.0 > 0 {
-                        let duration = duration.0 as f64 / timescale.0 as f64;
-                        track_valid = duration >= required_duration.as_fractional_secs();
+                    let numerator = duration.0;
+                    let denominator = timescale.0;
+                    if denominator == 0 {
+                        continue;
+                    }
+                    let integer = numerator / denominator;
+                    let remainder = numerator % denominator;
+                    if let Some(integer) = integer.checked_mul(microseconds_per_second) {
+                        let micros = remainder
+                            .checked_mul(microseconds_per_second)
+                            .and_then(|remainder| (remainder / denominator).checked_add(integer));
+                        if let Some(duration) = micros {
+                            track_valid = duration > required_duration_micros;
+                        }
                     }
                 }
-                valid = valid && track_valid;
+                valid = valid || track_valid;
             }
             valid
         }
@@ -122,7 +136,7 @@ impl Track {
             .map(|()| rng.sample(Alphanumeric))
             .take(8)
             .collect();
-        Track { path, id }
+        Self { path, id }
     }
 
     pub fn id(&self) -> &str {

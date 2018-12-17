@@ -30,7 +30,7 @@ pub fn task(
 /// `Some(state)` if the registration caused the media session id to change,
 /// `None` otherwise.
 pub fn register_media_session(
-    state: Mutex<ConnectState>,
+    state: &Mutex<ConnectState>,
     session: i64,
 ) -> impl Future<Item = Option<MediaConnection>, Error = ()> {
     state
@@ -51,7 +51,7 @@ pub fn register_media_session(
 /// media status when the session is no longer valid (e.g. if a new load has
 /// been schdeduled.
 pub fn invalidate_media_connection(
-    state: Mutex<ConnectState>,
+    state: &Mutex<ConnectState>,
 ) -> impl Future<Item = (), Error = ()> {
     state
         .lock()

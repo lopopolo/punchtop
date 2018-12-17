@@ -19,11 +19,11 @@ use playlist::fs::Track;
 #[derive(Debug)]
 pub enum Error {
     /// No interfaces available to bind to.
-    NoBindInterfaces,
+    BindInterface,
     /// No ports available to bind to on selected interface.
-    NoBindPort,
+    BindPort,
     /// Could not construct a base url for `Route`.
-    NoBaseUrl,
+    BaseUrl,
 }
 
 #[derive(Clone, Debug)]
@@ -45,6 +45,7 @@ impl Route {
 
 struct TrackRegistry(RwLock<HashMap<String, Track>>);
 
+#[allow(clippy::needless_pass_by_value)]
 #[get("/media/<id>")]
 fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
     state
@@ -63,6 +64,7 @@ fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8
         .map(Stream::from)
 }
 
+#[allow(clippy::needless_pass_by_value)]
 #[get("/cover/<id>")]
 fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
     state
@@ -78,7 +80,7 @@ fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8
 /// Spawn a thread that runs a media server for the given track registry.
 pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route, Error> {
     let addr = default_interface_addr(cast).and_then(get_available_port)?;
-    let base = Url::parse(&format!("http://{}/", addr)).map_err(|_| Error::NoBaseUrl)?;
+    let base = Url::parse(&format!("http://{}/", addr)).map_err(|_| Error::BaseUrl)?;
     let router = Route { base };
     debug!("bind to {:?}", addr);
     let config = Config::build(Environment::Production)
@@ -102,7 +104,7 @@ pub fn spawn(registry: HashMap<String, Track>, cast: SocketAddr) -> Result<Route
 fn default_interface_addr(addr: SocketAddr) -> Result<SocketAddr, Error> {
     TcpStream::connect_timeout(&addr, Duration::from_millis(150))
         .and_then(|conn| conn.local_addr())
-        .map_err(|_| Error::NoBindInterfaces)
+        .map_err(|_| Error::BindInterface)
 }
 
 fn port_is_available(addr: SocketAddr) -> bool {
@@ -117,12 +119,12 @@ fn get_available_port(addr: SocketAddr) -> Result<SocketAddr, Error> {
             candidate
         })
         .find(|addr| port_is_available(*addr))
-        .ok_or(Error::NoBindPort)
+        .ok_or(Error::BindPort)
 }
 
 fn generate_secret_key() -> String {
     // Rocket secret keys are 256 bits
-    let mut data = [0u8; 32];
+    let mut data = [0_u8; 32];
     thread_rng().fill_bytes(&mut data);
     base64::encode(&data)
 }

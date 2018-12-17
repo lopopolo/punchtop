@@ -4,43 +4,43 @@ use base64;
 use floating_duration::TimeAsFloat;
 use futures::sync::oneshot;
 
-use backend::chromecast::{CastAddr, Device};
+use backend::chromecast::{CastAddr, Device as CastDevice};
 use cast::{MediaConnection, ReceiverConnection, Status};
 use playlist::fs::{Playlist, Track};
 use stream::{DrainListener, DrainTrigger};
 
-pub struct AppState {
+pub struct State {
     playlist: Playlist,
-    client: Option<Device>,
+    client: Option<CastDevice>,
     connect: Option<ReceiverConnection>,
     session: Option<MediaConnection>,
     shutdown: Option<DrainTrigger>,
-    devices: Vec<AppDevice>,
+    devices: Vec<Device>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum AppLifecycle {
+pub enum Lifecycle {
     Uninitialized,
     Loaded,
     Terminating,
 }
 
-pub struct AppConfig {
+pub struct Config {
     pub duration: Duration,
     pub iterations: u64,
 }
 
-pub struct AppController {
-    pub config: AppConfig,
-    lifecycle: AppLifecycle,
-    state: AppState,
-    events: Vec<AppEvent>,
+pub struct Controller {
+    pub config: Config,
+    lifecycle: Lifecycle,
+    state: State,
+    events: Vec<Event>,
 }
 
-impl AppController {
-    pub fn new(config: AppConfig, playlist: Playlist) -> (Self, DrainListener) {
+impl Controller {
+    pub fn new(config: Config, playlist: Playlist) -> (Self, DrainListener) {
         let (trigger, listener) = oneshot::channel();
-        let state = AppState {
+        let state = State {
             playlist,
             client: None,
             connect: None,
@@ -52,7 +52,7 @@ impl AppController {
         (
             Self {
                 config,
-                lifecycle: AppLifecycle::Uninitialized,
+                lifecycle: Lifecycle::Uninitialized,
                 state,
                 events,
             },
@@ -61,16 +61,16 @@ impl AppController {
     }
 }
 
-impl AppController {
-    pub fn set_devices(&mut self, devices: Vec<AppDevice>) {
+impl Controller {
+    pub fn set_devices(&mut self, devices: Vec<Device>) {
         std::mem::replace(&mut self.state.devices, devices);
     }
 
-    pub fn devices(&self) -> &[AppDevice] {
+    pub fn devices(&self) -> &[Device] {
         &self.state.devices
     }
 
-    pub fn set_client(&mut self, client: Device) {
+    pub fn set_client(&mut self, client: CastDevice) {
         if let Some(mut old) = std::mem::replace(&mut self.state.client, Some(client)) {
             let _ = old.shutdown();
         }
@@ -82,18 +82,18 @@ impl AppController {
 }
 
 // View lifecyle
-impl AppController {
+impl Controller {
     pub fn view_did_load(&mut self) {
-        self.lifecycle = AppLifecycle::Loaded;
+        self.lifecycle = Lifecycle::Loaded;
     }
 
-    pub fn view_lifecycle(&self) -> &AppLifecycle {
+    pub fn view_lifecycle(&self) -> &Lifecycle {
         &self.lifecycle
     }
 }
 
 // Playback controls
-impl AppController {
+impl Controller {
     fn load_next(&mut self) -> Option<(u64, Track)> {
         let client = self.state.client.as_ref()?;
         let connect = self.state.connect.as_ref()?;
@@ -129,80 +129,74 @@ impl AppController {
         if let Some(shutdown) = self.state.shutdown.take() {
             let _ = shutdown.send(());
         }
-        self.lifecycle = AppLifecycle::Terminating;
+        self.lifecycle = Lifecycle::Terminating;
     }
 }
 
-impl AppController {
-    pub fn handle(&mut self, event: Status) -> Vec<AppEvent> {
+impl Controller {
+    pub fn handle(&mut self, event: Status) -> Vec<Event> {
         use cast::Status::*;
         if !self.events.is_empty() {
-            debug!("AppEvents backlog of {} events", self.events.len());
+            debug!("app backlog of {} events", self.events.len());
         }
         match event {
             Connected(connect) => {
                 self.state.connect = Some(*connect);
                 if let Some((cursor, track)) = self.load_next() {
-                    self.events.push(AppEvent::SetMedia {
-                        media: media(track, cursor),
+                    self.events.push(Event::SetMedia {
+                        media: media(&track, cursor),
                     });
-                    self.events.push(AppEvent::SetPlayback { is_playing: true });
+                    self.events.push(Event::SetPlayback { is_playing: true });
                 }
             }
             MediaConnected(session) => {
                 self.state.session = Some(*session);
                 self.play();
             }
-            MediaStatus(ref status)
-                if status.current_time < self.config.duration.as_fractional_secs() =>
+            MediaState(ref state)
+                if state.current_time < self.config.duration.as_fractional_secs() =>
             {
-                self.events.push(AppEvent::SetElapsed {
-                    elapsed: status.current_time,
+                self.events.push(Event::SetElapsed {
+                    elapsed: state.current_time,
                 });
             }
-            MediaStatus(_) if self.state.session.is_some() => {
+            MediaState(_) if self.state.session.is_some() => {
                 info!("Time limit reached. Advancing game");
-                match self.load_next() {
-                    Some((cursor, track)) => {
-                        self.state.session = None;
-                        info!("Advancing to track {}", cursor);
-                        self.events.push(AppEvent::SetMedia {
-                            media: media(track, cursor),
-                        });
-                    }
-                    None => {
-                        warn!("No more tracks. Shutting down");
-                        self.events.push(AppEvent::ClearMedia);
-                        self.events.push(AppEvent::Shutdown);
-                        self.shutdown();
-                    }
+                if let Some((cursor, track)) = self.load_next() {
+                    self.state.session = None;
+                    info!("Advancing to track {}", cursor);
+                    self.events.push(Event::SetMedia {
+                        media: media(&track, cursor),
+                    });
+                } else {
+                    warn!("No more tracks. Shutting down");
+                    self.events.push(Event::ClearMedia);
+                    self.events.push(Event::Shutdown);
+                    self.shutdown();
                 }
             }
-            MediaStatus(_) => {}
+            MediaState(_) => {}
             event => warn!("Got unknown app event: {:?}", event),
         }
-        if self.lifecycle == AppLifecycle::Uninitialized {
+        if self.lifecycle == Lifecycle::Uninitialized {
             return vec![];
         }
         std::mem::replace(&mut self.events, vec![])
     }
 }
 
-fn media(track: Track, cursor: u64) -> AppMedia {
+fn media(track: &Track, cursor: u64) -> Media {
     let cover = track.cover().map(|image| {
-        let (width, height) = image
-            .dimensions()
-            .map(|(w, h, _)| (w, h))
-            .unwrap_or_else(|| (600, 600));
+        let (width, height) = image.dimensions().map_or((600, 600), |(w, h, _)| (w, h));
         let mime = image.mime();
         let bytes = base64::encode_config(&image.unwrap(), base64::URL_SAFE);
-        AppImage {
+        Image {
             url: format!("data:{};base64,{}", mime, bytes),
             height,
             width,
         }
     });
-    AppMedia {
+    Media {
         id: track.id().to_owned(),
         cursor,
         artist: track.tags().and_then(|tag| tag.artist.to_option()),
@@ -214,7 +208,7 @@ fn media(track: Track, cursor: u64) -> AppMedia {
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 #[allow(dead_code)]
-pub enum AppEvent {
+pub enum Event {
     ClearMedia,
     SetConfig {
         duration: f64,
@@ -223,7 +217,7 @@ pub enum AppEvent {
         elapsed: f64,
     },
     SetMedia {
-        media: AppMedia,
+        media: Media,
     },
     #[serde(rename_all = "camelCase")]
     SetPlayback {
@@ -237,16 +231,16 @@ pub enum AppEvent {
 }
 
 #[derive(Serialize, Debug)]
-pub struct AppMedia {
+pub struct Media {
     id: String,
     cursor: u64,
     artist: Option<String>,
     title: Option<String>,
-    cover: Option<AppImage>,
+    cover: Option<Image>,
 }
 
 #[derive(Serialize, Debug)]
-pub struct AppImage {
+pub struct Image {
     url: String,
     height: u32,
     width: u32,
@@ -254,7 +248,7 @@ pub struct AppImage {
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AppDevice {
+pub enum Device {
     Cast {
         name: String,
         is_connected: bool,

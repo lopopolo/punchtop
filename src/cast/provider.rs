@@ -80,7 +80,7 @@ pub enum Command {
 pub enum Status {
     Connected(Box<ReceiverConnection>),
     MediaConnected(Box<MediaConnection>),
-    MediaStatus(Box<MediaStatus>),
+    MediaState(Box<MediaStatus>),
     LoadCancelled,
     LoadFailed,
     InvalidPlayerState,
@@ -95,7 +95,7 @@ pub enum SessionLifecycle {
 }
 
 impl Default for SessionLifecycle {
-    fn default() -> SessionLifecycle {
+    fn default() -> Self {
         SessionLifecycle::Init
     }
 }
@@ -120,13 +120,12 @@ impl ConnectState {
 
     pub fn media_connection(&self) -> Option<MediaConnection> {
         match self.lifecycle {
-            SessionLifecycle::Init => None,
+            SessionLifecycle::Init | SessionLifecycle::NoMediaSession => None,
             SessionLifecycle::Established => {
                 let receiver = self.receiver_connection()?;
                 let session = self.media_session?;
                 Some(MediaConnection { receiver, session })
             }
-            SessionLifecycle::NoMediaSession => None,
         }
     }
 

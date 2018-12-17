@@ -31,7 +31,7 @@ pub struct CastAddr {
 }
 
 impl PartialEq for CastAddr {
-    fn eq(&self, other: &CastAddr) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }

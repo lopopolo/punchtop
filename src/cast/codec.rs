@@ -7,7 +7,7 @@ use tokio::codec::{Decoder, Encoder};
 
 use super::message::namespace;
 use super::payload::*;
-use super::proto::CastMessage;
+use super::proto;
 use super::provider::*;
 use super::{message, ChannelMessage};
 
@@ -16,7 +16,7 @@ const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
 /// Max message size is [64KB](https://developers.google.com/cast/docs/reference/messages).
 const CAST_MESSAGE_PROTOBUF_MAX_LENGTH: usize = 64 << 10;
 
-/// `CastMessageCodec` decodes a length-prefixed protobuf. This enum represents
+/// `CastMessage` decodes a length-prefixed protobuf. This enum represents
 /// the phase of the decoding. Keep track of the decode phase to ensure the
 /// decoder does not drop bytes from the `BytesMut`.
 #[derive(Debug)]
@@ -34,14 +34,14 @@ impl Default for DecodeState {
 }
 
 #[derive(Debug, Default)]
-pub struct CastMessageCodec {
+pub struct CastMessage {
     state: DecodeState,
     request_id: i64,
     decoded_frames: i64,
     encoded_frames: i64,
 }
 
-impl Encoder for CastMessageCodec {
+impl Encoder for CastMessage {
     type Item = Command;
     type Error = io::Error;
 
@@ -72,7 +72,7 @@ impl Encoder for CastMessageCodec {
 
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
-        message::encode(message, &mut buf)
+        message::encode(&message, &mut buf)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
@@ -86,7 +86,7 @@ impl Encoder for CastMessageCodec {
     }
 }
 
-impl CastMessageCodec {
+impl CastMessage {
     /// Cast wire protocol is a 4-byte big endian length-prefixed protobuf. At
     /// least 4 bytes are required to decode the next frame. Read the length of
     /// the following protobuf and reserve that much capacity in the `BytesMut`.
@@ -114,7 +114,7 @@ impl CastMessageCodec {
     }
 }
 
-impl Decoder for CastMessageCodec {
+impl Decoder for CastMessage {
     type Item = ChannelMessage;
     type Error = io::Error;
 
@@ -131,7 +131,7 @@ impl Decoder for CastMessageCodec {
             Some(mut src) => {
                 self.state = DecodeState::Header;
                 src.reserve(CAST_MESSAGE_HEADER_LENGTH);
-                let message = protobuf::parse_from_bytes::<CastMessage>(&src)
+                let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 trace!(
                     "CastMessageCodec stream=decode namespace={}",

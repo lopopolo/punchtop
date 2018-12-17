@@ -17,12 +17,7 @@ pub fn task(
 ) -> impl Future<Item = (), Error = ()> {
     source
         .for_each(move |message| {
-            read(
-                message,
-                connect_state.clone(),
-                status.clone(),
-                command.clone(),
-            );
+            read(message, &connect_state, status.clone(), command.clone());
             Ok(())
         })
         .map(|_| ())
@@ -31,19 +26,19 @@ pub fn task(
 
 fn read(
     message: ChannelMessage,
-    connect: Mutex<ConnectState>,
+    connect: &Mutex<ConnectState>,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
 ) {
     match message {
         ChannelMessage::Heartbeat(message) => trace!("Got heartbeat: {:?}", message),
-        ChannelMessage::Media(message) => do_media(*message, tx, connect),
+        ChannelMessage::Media(message) => do_media(*message, &tx, connect),
         ChannelMessage::Receiver(message) => do_receiver(*message, tx, command, connect),
         payload => warn!("Got unknown payload: {:?}", payload),
     }
 }
 
-fn do_media(message: media::Response, tx: UnboundedSender<Status>, connect: Mutex<ConnectState>) {
+fn do_media(message: media::Response, tx: &UnboundedSender<Status>, connect: &Mutex<ConnectState>) {
     use cast::payload::media::Response::*;
     match message {
         MediaStatus { status, .. } => {
@@ -62,8 +57,8 @@ fn do_media(message: media::Response, tx: UnboundedSender<Status>, connect: Mute
                 }
                 None => tokio::spawn(invalidate_media_connection(connect)),
             };
-            if let Some(status) = status {
-                let _ = tx.unbounded_send(Status::MediaStatus(Box::new(status)));
+            if let Some(state) = status {
+                let _ = tx.unbounded_send(Status::MediaState(Box::new(state)));
             }
         }
         payload => warn!("Got unknown payload on media channel: {:?}", payload),
@@ -74,7 +69,7 @@ fn do_receiver(
     message: receiver::Response,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
-    connect: Mutex<ConnectState>,
+    connect: &Mutex<ConnectState>,
 ) {
     use cast::payload::receiver::Response::*;
     let ReceiverStatus { status, .. } = message;

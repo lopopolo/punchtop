@@ -13,13 +13,13 @@ use tokio_tls::{TlsConnector, TlsStream};
 mod codec;
 mod message;
 mod payload;
+#[allow(clippy::all, clippy::pedantic)]
 mod proto;
 mod provider;
 mod worker;
 
 use stream::drain;
 
-use self::codec::CastMessageCodec;
 pub use self::payload::*;
 pub use self::provider::*;
 
@@ -58,7 +58,7 @@ impl Chromecast {
     pub fn load(&self, connect: &ReceiverConnection, media: Media) {
         let command = self.command.clone();
         let connect = connect.clone();
-        let task = worker::status::invalidate_media_connection(self.connect.clone());
+        let task = worker::status::invalidate_media_connection(&self.connect);
         let task = task.map(move |_| {
             let _ = command.unbounded_send(Command::Load {
                 connect,
@@ -133,7 +133,7 @@ pub fn connect(
     };
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
-        let (sink, source) = Framed::new(socket, CastMessageCodec::default()).split();
+        let (sink, source) = Framed::new(socket, codec::CastMessage::default()).split();
         let read = worker::read::task(
             source,
             connect.clone(),

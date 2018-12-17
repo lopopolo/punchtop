@@ -1,4 +1,4 @@
-#![allow(clippy::large_enum_variant)]
+#![allow(clippy::large_enum_variant, clippy::stutter)]
 #![allow(dead_code)]
 
 //! The cast protocol splits messages across namespaces, which act like distinct

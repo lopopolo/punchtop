@@ -1,5 +1,6 @@
 #![feature(inner_deref)]
 #![feature(proc_macro_hygiene, decl_macro)]
+#![warn(clippy::all, clippy::pedantic)]
 
 extern crate base64;
 extern crate byteorder;
@@ -53,7 +54,7 @@ mod cast;
 mod playlist;
 mod stream;
 
-use app::{AppConfig, AppController, AppEvent, AppLifecycle};
+use app::{Config, Controller, Event, Lifecycle};
 use backend::chromecast::Device;
 use stream::drain;
 
@@ -62,17 +63,16 @@ const CAST: &str = "Kitchen Home";
 fn main() {
     env_logger::init();
     let mut rt = Runtime::new().unwrap();
-    let config = AppConfig {
+    let config = Config {
         duration: Duration::new(60, 0),
         iterations: 10,
     };
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
-    let player = match player {
-        Some(player) => player,
-        None => {
-            eprintln!("Could not find chromecast named {}", CAST);
-            ::std::process::exit(1);
-        }
+    let player = if let Some(player) = player {
+        player
+    } else {
+        eprintln!("Could not find chromecast named {}", CAST);
+        ::std::process::exit(1);
     };
     let playlist = playlist::fs::music::new(&config).unwrap();
     let (client, chan) = match Device::connect(&player, playlist.registry(), &mut rt) {
@@ -83,7 +83,7 @@ fn main() {
             ::std::process::exit(1);
         }
     };
-    let (mut controller, shutdown) = AppController::new(config, playlist);
+    let (mut controller, shutdown) = Controller::new(config, playlist);
     controller.set_client(client);
     let controller = Arc::new(Mutex::new(controller));
     let handler_controller = Arc::clone(&controller);
@@ -102,13 +102,13 @@ fn main() {
                 "init" => {
                     dispatch_in_webview(
                         webview,
-                        &AppEvent::SetConfig {
+                        &Event::SetConfig {
                             duration: controller.config.duration.as_fractional_secs(),
                         },
                     );
                     dispatch_in_webview(
                         webview,
-                        &AppEvent::SetPlaylist {
+                        &Event::SetPlaylist {
                             name: controller.playlist_name().to_owned(),
                         },
                     );
@@ -143,11 +143,9 @@ fn main() {
             Some(Err(e)) => warn!("Error in webview runloop: {:?}", e),
             None => break,
         }
-        let shutdown = controller
-            .lock()
-            .ok()
-            .map(|controller| controller.view_lifecycle() == &AppLifecycle::Terminating)
-            .unwrap_or(false);
+        let shutdown = controller.lock().ok().map_or(false, |controller| {
+            controller.view_lifecycle() == &Lifecycle::Terminating
+        });
         if shutdown {
             debug!("Shutting down webview runloop");
             break;
@@ -160,7 +158,7 @@ fn main() {
     debug!("tokio runloop completed");
 }
 
-fn dispatch_in_webview(webview: &mut WebView<()>, event: &AppEvent) {
+fn dispatch_in_webview(webview: &mut WebView<()>, event: &Event) {
     let eval = to_string(event).map(|json| {
         let eval = format!("store.dispatch({})", json);
         webview.eval(&eval)
