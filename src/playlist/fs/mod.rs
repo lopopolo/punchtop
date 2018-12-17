@@ -176,12 +176,8 @@ impl Iterator for Playlist {
             return None;
         }
         self.cursor += 1;
-        match self.tracks.pop_front() {
-            Some(track) => {
-                self.tracks.push_back(track.clone());
-                Some((self.cursor, track))
-            }
-            None => None,
-        }
+        let track = self.tracks.pop_front()?;
+        self.tracks.push_back(track.clone());
+        Some((self.cursor, track))
     }
 }

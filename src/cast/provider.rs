@@ -110,23 +110,21 @@ pub struct ConnectState {
 
 impl ConnectState {
     pub fn receiver_connection(&self) -> Option<ReceiverConnection> {
-        match (self.session.as_ref(), self.transport.as_ref()) {
-            (Some(session), Some(transport)) => Some(ReceiverConnection {
-                session: session.to_owned(),
-                transport: transport.to_owned(),
-            }),
-            _ => None,
-        }
+        let session = self.session.as_ref()?;
+        let transport = self.transport.as_ref()?;
+        Some(ReceiverConnection {
+            session: session.to_owned(),
+            transport: transport.to_owned(),
+        })
     }
 
     pub fn media_connection(&self) -> Option<MediaConnection> {
         match self.lifecycle {
             SessionLifecycle::Init => None,
             SessionLifecycle::Established => {
-                match (self.receiver_connection(), self.media_session) {
-                    (Some(receiver), Some(session)) => Some(MediaConnection { receiver, session }),
-                    _ => None,
-                }
+                let receiver = self.receiver_connection()?;
+                let session = self.media_session?;
+                Some(MediaConnection { receiver, session })
             }
             SessionLifecycle::NoMediaSession => None,
         }

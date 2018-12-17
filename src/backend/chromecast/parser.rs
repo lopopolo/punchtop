@@ -28,12 +28,9 @@ do_parse!(
 pub fn dns_txt<T: AsRef<str>>(vec: &[T]) -> HashMap<String, String> {
     let mut collect: HashMap<String, String> = HashMap::new();
     for txt in vec.iter() {
-        match key_value(CompleteStr(txt.as_ref())) {
-            Ok((_, (key, value))) => {
-                collect.insert(key.as_ref().to_owned(), value.as_ref().to_owned())
-            }
-            _ => None,
-        };
+        if let Ok((_, (key, value))) = key_value(CompleteStr(txt.as_ref())) {
+            collect.insert(key.as_ref().to_owned(), value.as_ref().to_owned());
+        }
     }
     collect
 }
