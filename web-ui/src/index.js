@@ -5,10 +5,10 @@ import { Provider } from "react-redux";
 
 import rootReducer from "./reducer";
 import App from "./app";
-import * as actions from "./actions";
 import Root from "./components/root";
+import "./index.css";
 
-const store = createStore(rootReducer(), { punchtop: window.PUNCHTOP });
+const store = createStore(rootReducer());
 
 const render = () => {
   ReactDOM.render(
@@ -23,5 +23,4 @@ const render = () => {
 
 render();
 
-global.actions = actions;
 global.store = store;

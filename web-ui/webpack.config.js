@@ -22,6 +22,7 @@ module.exports = {
       },
       {
         test: /\.css$/,
+        exclude: /index\.css/,
         use: [
           {
             loader: "style-loader"
@@ -35,6 +36,11 @@ module.exports = {
             }
           }
         ]
+      },
+      {
+        test: /\.css$/,
+        include: /index\.css/,
+        use: ["style-loader", "css-loader"]
       },
       {
         test: /\.(png|jp(e?)g|svg)$/,

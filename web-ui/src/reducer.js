@@ -12,7 +12,30 @@ import {
   TOGGLE_PLAYBACK
 } from "./actions";
 
-const reducer = (state = {}, action) => {
+const initialState = {
+  media: {
+    current: null
+  },
+  config: {
+    duration: 60,
+    source: null
+  },
+  player: {
+    elapsed: 0.0,
+    isPlaying: false
+  },
+  device: {
+    active: {},
+    all: [
+      { kind: "cast", name: "TV" },
+      { kind: "local", name: "quadbox" },
+      { kind: "cast", name: "Kitchen Home" },
+      { kind: "cast", name: "Soundbar" }
+    ]
+  }
+};
+
+const reducer = (state = initialState, action) => {
   switch (action.type) {
     case CLEAR_MEDIA: {
       const media = Object.assign({}, state.media, {
