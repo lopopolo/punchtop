@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::iter;
@@ -19,6 +20,8 @@ use app::Config;
 pub mod dir;
 pub mod music;
 
+const FALLBACK_PLAYLIST_SIZE: usize = 60;
+
 pub fn new(root: &Path, name: &str, config: &Config) -> Playlist {
     let mut vec = Vec::new();
     let walker = WalkDir::new(root)
@@ -33,9 +36,9 @@ pub fn new(root: &Path, name: &str, config: &Config) -> Playlist {
     let mut rng = thread_rng();
     vec.shuffle(&mut rng);
 
-    let vec: Vec<Track> = vec
+    let iterations = config.iterations.try_into().unwrap_or(FALLBACK_PLAYLIST_SIZE);
+    let playlist: Vec<Track> = vec
         .into_iter()
-        .take(2 * config.iterations as usize)
         .filter_map(|path| {
             if is_audio_media(&path) && is_sufficient_duration(&path, config.duration) {
                 Some(Track::new(path))
@@ -43,11 +46,12 @@ pub fn new(root: &Path, name: &str, config: &Config) -> Playlist {
                 None
             }
         })
+        .take(iterations)
         .collect();
 
     Playlist {
         name: name.to_owned(),
-        tracks: VecDeque::from(vec),
+        tracks: VecDeque::from(playlist),
         iterations: config.iterations,
         cursor: 0,
     }
