@@ -47,20 +47,12 @@ struct TrackRegistry(RwLock<HashMap<String, Track>>);
 
 #[allow(clippy::needless_pass_by_value)]
 #[get("/media/<id>")]
-fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
+fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<impl Read>> {
     state
         .0
         .read()
         .ok()
         .and_then(|registry| registry.get(&id).and_then(|track| track.stream()))
-        .and_then(|mut stream| {
-            let mut buf = Vec::new();
-            match stream.read_to_end(&mut buf) {
-                Ok(_) => Some(buf),
-                Err(_) => None,
-            }
-        }) // TODO: set Content-Type header
-        .map(Cursor::new)
         .map(Stream::from)
 }
 
@@ -72,7 +64,7 @@ fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8
         .read()
         .ok()
         .and_then(|registry| registry.get(&id).and_then(|track| track.cover()))
-        .map(|img| img.unwrap()) // TODO: set Content-Type header
+        .map(|img| img.unwrap())
         .map(Cursor::new)
         .map(Stream::from)
 }
