@@ -139,7 +139,7 @@ pub struct Track {
 impl Track {
     pub fn new(path: PathBuf) -> Self {
         let mut rng = thread_rng();
-        let id: String = iter::repeat(())
+        let id = iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .take(8)
             .collect();

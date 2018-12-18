@@ -78,7 +78,7 @@ impl Encoder for CastMessage {
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
         let header = &mut [0; 4];
-        let msg_size: u32 = buf
+        let msg_size = buf
             .len()
             .try_into()
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
