@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::io;
 
 use byteorder::{BigEndian, ByteOrder};
@@ -77,7 +78,11 @@ impl Encoder for CastMessage {
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
         let header = &mut [0; 4];
-        BigEndian::write_u32(header, buf.len() as u32);
+        let msg_size: u32 = buf
+            .len()
+            .try_into()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        BigEndian::write_u32(header, msg_size);
 
         dst.reserve(CAST_MESSAGE_HEADER_LENGTH + buf.len());
         dst.put_slice(header);
