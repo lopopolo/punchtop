@@ -6,6 +6,7 @@ extern crate base64;
 extern crate byteorder;
 extern crate bytes;
 extern crate dirs;
+extern crate elapsed;
 extern crate env_logger;
 extern crate floating_duration;
 extern crate futures;

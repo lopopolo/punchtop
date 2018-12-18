@@ -7,5 +7,9 @@ pub fn new(root: &Path, config: &Config) -> Option<super::Playlist> {
         || "Playlist".to_owned(),
         |name| name.to_string_lossy().into_owned(),
     );
-    Some(super::new(root, &name, config))
+    let (elapsed, playlist) = elapsed::measure_time(|| {
+        super::new(&root, &name, config)
+    });
+    info!("Took {} building a {} item playlist from {:?}", elapsed, config.iterations, root);
+    Some(playlist)
 }
