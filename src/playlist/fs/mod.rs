@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
+use mp4::{TrackScaledTime, TrackTimeScale};
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
 use rand::distributions::Alphanumeric;
@@ -99,32 +100,12 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
             if mp4::read_mp4(&mut c, &mut context).is_err() {
                 return false;
             }
-            let microseconds_per_second = 1_000_000;
-            let required_duration_micros = microseconds_per_second * required_duration.as_secs()
-                + u64::from(required_duration.subsec_micros());
-            let mut valid = false;
-            for track in context.tracks {
-                let mut track_valid = false;
-                if let (Some(duration), Some(timescale)) = (track.duration, track.timescale) {
-                    let numerator = duration.0;
-                    let denominator = timescale.0;
-                    if denominator == 0 {
-                        continue;
-                    }
-                    let integer = numerator / denominator;
-                    let remainder = numerator % denominator;
-                    if let Some(integer) = integer.checked_mul(microseconds_per_second) {
-                        let micros = remainder
-                            .checked_mul(microseconds_per_second)
-                            .and_then(|remainder| (remainder / denominator).checked_add(integer));
-                        if let Some(duration) = micros {
-                            track_valid = duration > required_duration_micros;
-                        }
-                    }
+            context.tracks.into_iter().all(|track| {
+                match scale_to_micros(track.duration, track.timescale) {
+                    Some(duration) if duration > required_duration.as_micros() => true,
+                    _ => false,
                 }
-                valid = valid || track_valid;
-            }
-            valid
+            })
         }
         _ => false,
     }
@@ -201,4 +182,25 @@ impl Iterator for Playlist {
         self.tracks.push_back(track.clone());
         Some((self.cursor, track))
     }
+}
+
+fn scale_to_micros(
+    duration: Option<TrackScaledTime<u64>>,
+    scale: Option<TrackTimeScale<u64>>,
+) -> Option<u128> {
+    let microseconds_per_second = 1_000_000;
+    let numerator = duration.map(|d| d.0)?;
+    let denominator = scale.map(|s| s.0)?;
+
+    if denominator == 0 {
+        return None;
+    }
+
+    let integer = numerator / denominator;
+    let remainder = numerator % denominator;
+    let integer = integer.checked_mul(microseconds_per_second)?;
+    let remainder = remainder.checked_mul(microseconds_per_second)?;
+    (remainder / denominator)
+        .checked_add(integer)
+        .map(u128::from)
 }
