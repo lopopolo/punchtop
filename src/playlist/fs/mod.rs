@@ -36,7 +36,10 @@ pub fn new(root: &Path, name: &str, config: &Config) -> Playlist {
     let mut rng = thread_rng();
     vec.shuffle(&mut rng);
 
-    let iterations = config.iterations.try_into().unwrap_or(FALLBACK_PLAYLIST_SIZE);
+    let iterations = config
+        .iterations
+        .try_into()
+        .unwrap_or(FALLBACK_PLAYLIST_SIZE);
     let playlist: Vec<Track> = vec
         .into_iter()
         .filter_map(|path| {
