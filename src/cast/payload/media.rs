@@ -1,6 +1,8 @@
 //! The media channel manages media sessions and playback. See the
 //! [cast reference docs](https://developers.google.com/cast/docs/reference/messages).
 
+use serde_derive::{Deserialize, Serialize};
+
 const METADATA_TYPE_MUSIC_TRACK: u32 = 3;
 
 #[derive(Serialize, Debug)]

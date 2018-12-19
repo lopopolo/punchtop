@@ -2,42 +2,10 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #![warn(clippy::all, clippy::pedantic)]
 
-extern crate base64;
-extern crate byteorder;
-extern crate bytes;
-extern crate dirs;
-extern crate elapsed;
-extern crate env_logger;
-extern crate floating_duration;
-extern crate futures;
-extern crate futures_locks;
-extern crate hostname;
 #[macro_use]
 extern crate log;
-extern crate mdns;
-extern crate mp3_duration;
-extern crate mp4parse as mp4;
-extern crate native_tls;
-extern crate neguse_taglib;
-extern crate neguse_types;
-#[macro_use]
-extern crate nom;
-extern crate openssl;
-extern crate protobuf;
-extern crate rand;
 #[macro_use]
 extern crate rocket;
-extern crate rodio;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-extern crate tokio;
-extern crate tokio_tls;
-extern crate tree_magic;
-extern crate url;
-extern crate walkdir;
-extern crate web_view;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

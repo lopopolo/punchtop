@@ -1,5 +1,7 @@
 //! The connection channel manages connection state to cast transports.
 
+use serde_derive::{Deserialize, Serialize};
+
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Request {

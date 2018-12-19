@@ -6,9 +6,8 @@
 ///!
 ///! - `md` - Model Name
 ///! - `fn` - Friendly Name
-extern crate nom;
 
-use nom::alphanumeric;
+use nom::{alphanumeric, call, char, do_parse, named, take_while};
 use nom::types::CompleteStr;
 
 use std::collections::HashMap;

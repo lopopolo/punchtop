@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
-use crate::mp4::{TrackScaledTime, TrackTimeScale};
+use mp4parse::{MediaContext, TrackScaledTime, TrackTimeScale};
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
 use rand::distributions::Alphanumeric;
@@ -96,8 +96,8 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
                 return false;
             }
             let mut c = Cursor::new(&buf);
-            let mut context = mp4::MediaContext::new();
-            if mp4::read_mp4(&mut c, &mut context).is_err() {
+            let mut context = MediaContext::new();
+            if mp4parse::read_mp4(&mut c, &mut context).is_err() {
                 return false;
             }
             context.tracks.into_iter().all(|track| {

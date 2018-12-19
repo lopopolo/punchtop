@@ -1,6 +1,8 @@
 //! The receiver channel manages global receiver state like the active cast app
 //! and device volume.
 
+use serde_derive::{Deserialize, Serialize};
+
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Request {

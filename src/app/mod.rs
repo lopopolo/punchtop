@@ -3,6 +3,7 @@ use std::time::Duration;
 use base64;
 use floating_duration::TimeAsFloat;
 use futures::sync::oneshot;
+use serde_derive::Serialize;
 
 use crate::backend::chromecast::{CastAddr, Device as CastDevice};
 use crate::cast::{MediaConnection, ReceiverConnection, Status};
