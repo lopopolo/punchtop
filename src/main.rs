@@ -34,7 +34,7 @@ fn main() {
     let mut rt = Runtime::new().unwrap();
     let config = Config {
         duration: Duration::new(60, 0),
-        iterations: 10,
+        iterations: 30,
     };
     let player = backend::chromecast::devices().find(|p| p.name == CAST);
     let player = if let Some(player) = player {

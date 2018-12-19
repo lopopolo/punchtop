@@ -117,13 +117,8 @@ impl CastMessage {
         }
         Some(src.split_to(n))
     }
-}
 
-impl Decoder for CastMessage {
-    type Item = ChannelMessage;
-    type Error = io::Error;
-
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn try_decode(&mut self, src: &mut BytesMut) -> Result<Option<ChannelMessage>, io::Error> {
         let n = match self.state {
             DecodeState::Header => match self.decode_header(src) {
                 Some(n) => n,
@@ -187,5 +182,18 @@ impl Decoder for CastMessage {
             message
         );
         message
+    }
+}
+
+impl Decoder for CastMessage {
+    type Item = ChannelMessage;
+    type Error = io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        let item = self.try_decode(src);
+        if item.is_err() {
+            warn!("Error in decoder: {:?}", item);
+        }
+        item
     }
 }

@@ -83,7 +83,10 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
             });
             match ok {
                 Ok(ok) => ok,
-                Err(_) => false,
+                Err(_) => {
+                    warn!("Panic when checking duration of {} filetype at {:?}", mime, path);
+                    false
+                }
             }
         }
         "audio/aac" | "audio/mp4" => {
