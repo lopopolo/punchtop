@@ -2,6 +2,7 @@
 name = "punchtop"
 version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
+edition = "2018"
 
 [build-dependencies]
 protobuf-codegen-pure = "2"
