@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
 
-use mp4::{TrackScaledTime, TrackTimeScale};
+use crate::mp4::{TrackScaledTime, TrackTimeScale};
 use neguse_taglib::{get_front_cover, get_tags};
 use neguse_types::{Image, Tags};
 use rand::distributions::Alphanumeric;
@@ -16,7 +16,7 @@ use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use walkdir::WalkDir;
 
-use app::Config;
+use crate::app::Config;
 
 pub mod dir;
 pub mod music;

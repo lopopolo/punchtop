@@ -6,13 +6,13 @@ use std::time::Duration;
 use futures::sync::mpsc::UnboundedReceiver;
 use mdns::RecordKind;
 
-use backend::{self, Error};
-use playlist::fs::Track;
+use crate::backend::{self, Error};
+use crate::playlist::fs::Track;
 
 mod media_server;
 mod parser;
 use self::media_server::Route;
-use cast::{self, Chromecast, Image};
+use crate::cast::{self, Chromecast, Image};
 
 /// Google Chromecast multicast service identifier.
 const SERVICE_NAME: &str = "_googlecast._tcp.local";

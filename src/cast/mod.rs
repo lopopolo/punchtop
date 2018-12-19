@@ -18,7 +18,7 @@ mod proto;
 mod provider;
 mod worker;
 
-use stream::drain;
+use crate::stream::drain;
 
 pub use self::payload::*;
 pub use self::provider::*;

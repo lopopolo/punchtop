@@ -5,9 +5,9 @@ use futures::sync::mpsc::UnboundedSender;
 use futures::Future;
 use futures_locks::Mutex;
 
-use cast::payload::*;
-use cast::worker::status::{invalidate_media_connection, register_media_session};
-use cast::{ChannelMessage, Command, ConnectState, Status, DEFAULT_MEDIA_RECEIVER_APP_ID};
+use crate::cast::payload::*;
+use crate::cast::worker::status::{invalidate_media_connection, register_media_session};
+use crate::cast::{ChannelMessage, Command, ConnectState, Status, DEFAULT_MEDIA_RECEIVER_APP_ID};
 
 pub fn task(
     source: impl Stream<Item = ChannelMessage, Error = io::Error>,
@@ -39,7 +39,7 @@ fn read(
 }
 
 fn do_media(message: media::Response, tx: &UnboundedSender<Status>, connect: &Mutex<ConnectState>) {
-    use cast::payload::media::Response::*;
+    use crate::cast::payload::media::Response::*;
     match message {
         MediaStatus { status, .. } => {
             let status = status.into_iter().next();
@@ -71,7 +71,7 @@ fn do_receiver(
     command: UnboundedSender<Command>,
     connect: &Mutex<ConnectState>,
 ) {
-    use cast::payload::receiver::Response::*;
+    use crate::cast::payload::receiver::Response::*;
     let ReceiverStatus { status, .. } = message;
     let app = status
         .applications

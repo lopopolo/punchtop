@@ -1,8 +1,8 @@
 use serde_json::{to_string, Error};
 
-use cast::payload::media::*;
-use cast::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
-use cast::provider::{Media, MediaConnection, ReceiverConnection};
+use crate::cast::payload::media::*;
+use crate::cast::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
+use crate::cast::provider::{Media, MediaConnection, ReceiverConnection};
 
 pub const NAMESPACE: &str = "urn:x-cast:com.google.cast.media";
 

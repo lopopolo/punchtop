@@ -13,7 +13,7 @@ use rocket::response::Stream;
 use rocket::State;
 use url::Url;
 
-use playlist::fs::Track;
+use crate::playlist::fs::Track;
 
 /// Media server error wrapper.
 #[derive(Debug)]

@@ -4,10 +4,10 @@ use base64;
 use floating_duration::TimeAsFloat;
 use futures::sync::oneshot;
 
-use backend::chromecast::{CastAddr, Device as CastDevice};
-use cast::{MediaConnection, ReceiverConnection, Status};
-use playlist::fs::{Playlist, Track};
-use stream::{DrainListener, DrainTrigger};
+use crate::backend::chromecast::{CastAddr, Device as CastDevice};
+use crate::cast::{MediaConnection, ReceiverConnection, Status};
+use crate::playlist::fs::{Playlist, Track};
+use crate::stream::{DrainListener, DrainTrigger};
 
 pub struct State {
     playlist: Playlist,
@@ -135,7 +135,7 @@ impl Controller {
 
 impl Controller {
     pub fn handle(&mut self, event: Status) -> Vec<Event> {
-        use cast::Status::*;
+        use crate::cast::Status::*;
         if !self.events.is_empty() {
             debug!("app backlog of {} events", self.events.len());
         }

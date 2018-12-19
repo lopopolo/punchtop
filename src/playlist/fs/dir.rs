@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use app::Config;
+use crate::app::Config;
 
 pub fn new(root: &Path, config: &Config) -> Option<super::Playlist> {
     let name = root.file_name().map_or_else(

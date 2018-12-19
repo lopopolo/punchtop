@@ -55,9 +55,9 @@ mod cast;
 mod playlist;
 mod stream;
 
-use app::{Config, Controller, Event, Lifecycle};
-use backend::chromecast::Device;
-use stream::drain;
+use crate::app::{Config, Controller, Event, Lifecycle};
+use crate::backend::chromecast::Device;
+use crate::stream::drain;
 
 const CAST: &str = "Kitchen Home";
 
