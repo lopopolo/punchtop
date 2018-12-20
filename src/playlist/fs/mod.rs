@@ -84,7 +84,10 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
             if let Ok(ok) = ok {
                 ok
             } else {
-                warn!("Panic when checking duration of {} filetype at {:?}", mime, path);
+                warn!(
+                    "Panic when checking duration of {} filetype at {:?}",
+                    mime, path
+                );
                 false
             }
         }

@@ -3,7 +3,7 @@ use std::fmt;
 
 use url::Url;
 
-use super::payload::media::MediaStatus;
+use crate::cast::payload::media::MediaStatus;
 
 #[derive(Clone, Debug)]
 pub struct Media {
@@ -57,7 +57,6 @@ impl fmt::Display for Error {
 #[derive(Debug)]
 pub enum Command {
     Connect(ReceiverConnection),
-    Heartbeat,
     Launch {
         app_id: String,
     },
@@ -67,7 +66,9 @@ pub enum Command {
     },
     MediaStatus(MediaConnection),
     Pause(MediaConnection),
+    Ping,
     Play(MediaConnection),
+    Pong,
     ReceiverStatus,
     Seek(MediaConnection, f32),
     Shutdown,

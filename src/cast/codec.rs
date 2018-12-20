@@ -6,11 +6,11 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use serde_json::from_str;
 use tokio::codec::{Decoder, Encoder};
 
-use super::message::namespace;
-use super::payload::*;
-use super::proto;
-use super::provider::*;
-use super::{message, ChannelMessage};
+use crate::cast::message::namespace;
+use crate::cast::payload::*;
+use crate::cast::proto;
+use crate::cast::provider::*;
+use crate::cast::{message, ChannelMessage};
 
 /// Protobuf header is a big endian u32.
 const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
@@ -58,14 +58,15 @@ impl Encoder for CastMessage {
         );
         let message = match item {
             Command::Connect(connect) => message::connection::connect(&connect.transport),
-            Command::Heartbeat => message::heartbeat::ping(),
             Command::Launch { app_id } => message::receiver::launch(self.request_id, &app_id),
             Command::Load { connect, media } => {
                 message::media::load(self.request_id, &connect, *media)
             }
             Command::MediaStatus(connect) => message::media::status(self.request_id, &connect),
             Command::Pause(ref connect) => message::media::pause(self.request_id, &connect),
+            Command::Ping => message::heartbeat::ping(),
             Command::Play(ref connect) => message::media::play(self.request_id, &connect),
+            Command::Pong => message::heartbeat::pong(),
             Command::ReceiverStatus => message::receiver::status(self.request_id),
             Command::Stop(ref connect) => message::media::stop(self.request_id, connect),
             _ => unimplemented!(),
@@ -75,6 +76,10 @@ impl Encoder for CastMessage {
         let mut buf = Vec::new();
         message::encode(&message, &mut buf)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+        if buf.len() > CAST_MESSAGE_PROTOBUF_MAX_LENGTH {
+            panic!("CastMessageCodec encoder generated message of length {}, which is larger than the max message length of {}", buf.len(), CAST_MESSAGE_PROTOBUF_MAX_LENGTH);
+        }
 
         // Cast wire protocol is a 4-byte big endian length-prefixed protobuf.
         let header = &mut [0; 4];
