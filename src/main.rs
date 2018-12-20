@@ -4,8 +4,6 @@
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate rocket;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

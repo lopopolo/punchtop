@@ -10,7 +10,7 @@ use std::time::Duration;
 use rand::{thread_rng, RngCore};
 use rocket::config::{Config, Environment};
 use rocket::response::Stream;
-use rocket::State;
+use rocket::{get, routes, uri, State};
 use url::Url;
 
 use crate::playlist::fs::Track;
