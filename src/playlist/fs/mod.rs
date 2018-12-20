@@ -81,12 +81,11 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
                     .and_then(|duration| duration.checked_sub(required_duration))
                     .is_some()
             });
-            match ok {
-                Ok(ok) => ok,
-                Err(_) => {
-                    warn!("Panic when checking duration of {} filetype at {:?}", mime, path);
-                    false
-                }
+            if let Ok(ok) = ok {
+                ok
+            } else {
+                warn!("Panic when checking duration of {} filetype at {:?}", mime, path);
+                false
             }
         }
         "audio/aac" | "audio/mp4" => {
