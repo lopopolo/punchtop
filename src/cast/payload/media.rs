@@ -149,9 +149,7 @@ pub struct Metadata {
 
 impl Metadata {
     pub fn music_default() -> Self {
-        let mut music = Self::default();
-        music.metadata_type = METADATA_TYPE_MUSIC_TRACK;
-        music
+        Self { metadata_type: METADATA_TYPE_MUSIC_TRACK, ..Default::default() }
     }
 }
 
