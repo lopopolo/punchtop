@@ -1,0 +1,32 @@
+[package]
+name = "punchtop"
+version = "0.1.0"
+authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
+edition = "2018"
+
+[build-dependencies]
+protobuf-codegen-pure = "2"
+
+[dependencies]
+base64 = "0.10"
+env_logger = "0.6.0"
+floating-duration = "0.1"
+futures = "0.1"
+log = "0.4"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+tokio = "0.1"
+web-view = "0.4"
+
+[dependencies.cast-client]
+path = "../cast-client"
+
+[dependencies.punchtop-audio]
+path = "../punchtop-audio"
+
+[dependencies.punchtop-playlist]
+path = "../punchtop-playlist"
+
+[dependencies.stream-util]
+path = "../stream-util"

@@ -1,0 +1,29 @@
+[package]
+name = "cast-client"
+version = "0.1.0"
+authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
+edition = "2018"
+
+[build-dependencies]
+protobuf-codegen-pure = "2"
+
+[dependencies]
+byteorder = "1"
+bytes = "0.4"
+futures = "0.1"
+futures-locks = "0.2"
+log = "0.4"
+native-tls = "0.2"
+protobuf = "2"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+tokio-codec = "0.1"
+tokio-executor = "0.1"
+tokio-timer = "0.2"
+tokio-tcp = "0.1"
+tokio-tls = "0.2"
+url = "1"
+
+[dependencies.stream-util]
+path = "../stream-util"

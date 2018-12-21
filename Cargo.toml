@@ -1,43 +1,8 @@
-[package]
-name = "punchtop"
-version = "0.1.0"
-authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
-edition = "2018"
-
-[build-dependencies]
-protobuf-codegen-pure = "2"
-
-[dependencies]
-base64 = "0.10"
-byteorder = "1"
-bytes = "*"
-dirs = "*"
-elapsed = "0.1"
-env_logger = "0.6.0"
-floating-duration = "0.1.2"
-futures = "0.1"
-futures-locks = "0.2"
-hostname = "^0.1"
-log = "0.4.0"
-mdns = "*"
-mp3-duration = "*"
-mp4parse = "*"
-native-tls = "*"
-neguse-types = { git = "https://github.com/SilverEzhik/neguse-types" }
-neguse-taglib = { git = "https://github.com/SilverEzhik/neguse-taglib" }
-nom = "4"
-objc = "*"
-openssl = "*"
-protobuf = "~2"
-rand = "0.6"
-rocket = "0.4.0"
-rodio = "*"
-serde = "*"
-serde_derive = "*"
-serde_json = "1.0"
-tokio = "*"
-tokio-tls = "*"
-tree_magic = "*"
-url = "*"
-walkdir = "2"
-web-view = "*"
+[workspace]
+members = [
+  "cast-client",
+  "punchtop-app-webview",
+  "punchtop-audio",
+  "punchtop-playlist",
+  "stream-util",
+]
