@@ -3,7 +3,7 @@ use std::time::Duration;
 use base64;
 use cast_client::{MediaConnection, ReceiverConnection, Status};
 use floating_duration::TimeAsFloat;
-use punchtop_audio::chromecast::{CastAddr, Device as CastDevice};
+use punchtop_audio::chromecast::Device as CastDevice;
 use punchtop_audio::Track;
 use punchtop_playlist::fs::{FsTrack, Playlist};
 use serde_derive::Serialize;
@@ -15,7 +15,6 @@ pub struct State {
     connect: Option<ReceiverConnection>,
     session: Option<MediaConnection>,
     shutdown: Option<Trigger>,
-    devices: Vec<Device>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -46,7 +45,6 @@ impl Controller {
             connect: None,
             session: None,
             shutdown: Some(trigger),
-            devices: vec![],
         };
         let events = vec![];
         (
@@ -62,14 +60,6 @@ impl Controller {
 }
 
 impl Controller {
-    pub fn set_devices(&mut self, devices: Vec<Device>) {
-        std::mem::replace(&mut self.state.devices, devices);
-    }
-
-    pub fn devices(&self) -> &[Device] {
-        &self.state.devices
-    }
-
     pub fn set_client(&mut self, client: CastDevice) {
         if let Some(mut old) = std::mem::replace(&mut self.state.client, Some(client)) {
             let _ = old.shutdown();
@@ -243,19 +233,4 @@ pub struct Image {
     url: String,
     height: u32,
     width: u32,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Device {
-    Cast {
-        name: String,
-        is_connected: bool,
-        #[serde(skip_serializing)]
-        connect: CastAddr,
-    },
-    Local {
-        name: String,
-        is_connected: bool,
-    },
 }
