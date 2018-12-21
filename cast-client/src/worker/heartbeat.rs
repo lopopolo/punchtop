@@ -2,15 +2,12 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedSender;
-use stream_util::Cancelable;
+use stream_util::{Cancelable, Valve};
 use tokio_timer::Interval;
 
 use crate::Command;
 
-pub fn task(
-    valve: impl Future,
-    command: UnboundedSender<Command>,
-) -> impl Future<Item = (), Error = ()> {
+pub fn task(valve: Valve, command: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::new(5, 0))
         .cancel(valve)
         .map(|_| Command::Ping)

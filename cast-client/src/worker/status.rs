@@ -3,13 +3,13 @@ use std::time::Duration;
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedSender;
 use futures_locks::Mutex;
-use stream_util::Cancelable;
+use stream_util::{Cancelable, Valve};
 use tokio_timer::Interval;
 
 use crate::{Command, ConnectState, MediaConnection, SessionLifecycle};
 
 pub fn task(
-    valve: impl Future,
+    valve: Valve,
     state: Mutex<ConnectState>,
     tx: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {

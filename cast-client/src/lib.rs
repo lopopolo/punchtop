@@ -128,7 +128,6 @@ pub fn connect(
     let (status_tx, status_rx) = unbounded();
 
     let (trigger, valve) = stream_util::valve();
-    let valve = valve.shared();
 
     let connect = Mutex::new(ConnectState::default());
     let cast = Chromecast {

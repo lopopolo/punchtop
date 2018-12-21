@@ -5,6 +5,7 @@
 //
 // Copyright (c) 2016 Jon Gjengset
 
+use futures::future::Shared;
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot;
@@ -18,22 +19,10 @@ impl Trigger {
     }
 }
 
-pub type Valve = UnitFuture<oneshot::Receiver<()>>;
+#[derive(Clone, Debug)]
+pub struct Valve(Shared<oneshot::Receiver<()>>);
 
-pub fn valve() -> (Trigger, Valve) {
-    let (trigger, valve) = oneshot::channel();
-    (Trigger(trigger), UnitFuture(valve))
-}
-
-/// Allow `Future`s of arbitrary types to serve as `Valve`s. Useful when, e.g.
-/// making a `oneshot::Receiver` a `shared` `Future`.
-#[derive(Debug)]
-pub struct UnitFuture<F>(F);
-
-impl<F> Future for UnitFuture<F>
-where
-    F: Future,
-{
+impl Future for Valve {
     type Item = ();
     type Error = ();
 
@@ -44,6 +33,11 @@ where
             Err(_) => Err(()),
         }
     }
+}
+
+pub fn valve() -> (Trigger, Valve) {
+    let (trigger, valve) = oneshot::channel();
+    (Trigger(trigger), Valve(valve.shared()))
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -81,14 +75,14 @@ where
 }
 
 pub trait Drainable: Stream {
-    fn drain<F>(self, trigger: F) -> Drain<Self, UnitFuture<F::Future>>
+    fn drain<F>(self, trigger: F) -> Drain<Self, F::Future>
     where
-        F: IntoFuture,
+        F: IntoFuture<Item = (), Error = ()>,
         Self: Sized,
     {
         Drain {
             receiver: self,
-            until: UnitFuture(trigger.into_future()),
+            until: trigger.into_future(),
             state: DrainState::Active,
         }
     }
@@ -121,14 +115,14 @@ where
 }
 
 pub trait Cancelable: Stream {
-    fn cancel<F>(self, trigger: F) -> Cancel<Self, UnitFuture<F::Future>>
+    fn cancel<F>(self, trigger: F) -> Cancel<Self, F::Future>
     where
-        F: IntoFuture,
+        F: IntoFuture<Item = (), Error = ()>,
         Self: Sized,
     {
         Cancel {
             stream: self,
-            until: UnitFuture(trigger.into_future()),
+            until: trigger.into_future(),
         }
     }
 }
