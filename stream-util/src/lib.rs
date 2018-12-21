@@ -11,11 +11,19 @@ use futures::sync::mpsc::UnboundedReceiver;
 use futures::sync::oneshot;
 
 #[derive(Debug)]
-pub struct Trigger(oneshot::Sender<()>);
+pub struct Trigger(Option<oneshot::Sender<()>>);
 
 impl Trigger {
     pub fn terminate(self) {
-        let _ = self.0.send(());
+        drop(self);
+    }
+}
+
+impl Drop for Trigger {
+    fn drop(&mut self) {
+        if let Some(trigger) = self.0.take() {
+            let _ = trigger.send(());
+        }
     }
 }
 
@@ -37,7 +45,7 @@ impl Future for Valve {
 
 pub fn valve() -> (Trigger, Valve) {
     let (trigger, valve) = oneshot::channel();
-    (Trigger(trigger), Valve(valve.shared()))
+    (Trigger(Some(trigger)), Valve(valve.shared()))
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -136,40 +144,7 @@ mod tests {
     use futures::Future;
 
     #[test]
-    fn terminates_receiver() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
-        use std::thread;
-
-        let (trigger, valve) = valve();
-        let (sender, receiver) = mpsc::unbounded::<()>();
-
-        let counter = Arc::new(AtomicUsize::new(0));
-        let msg_counter = counter.clone();
-        sender.unbounded_send(()).unwrap();
-        let chan = thread::spawn(move || {
-            let task = receiver
-                .drain(valve)
-                .for_each(move |_| {
-                    msg_counter.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
-                })
-                .map_err(|e| eprintln!("receive failed: {:?}", e));
-            // start send-receive channel
-            tokio::run(task);
-        });
-        sender.unbounded_send(()).unwrap();
-
-        // The receiver thread will normally never exit, since the sender is
-        // open. With a `Drain` we can close the receiver and drain any messages
-        // still in the channel.
-        trigger.terminate();
-        chan.join().unwrap();
-        assert_eq!(2_usize, counter.load(Ordering::SeqCst));
-    }
-
-    #[test]
-    fn drains_receiver() {
+    fn terminate_drains_receiver() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
         use std::thread;
@@ -197,12 +172,52 @@ mod tests {
             tokio::run(task);
         });
 
+        // The receiver thread will normally never exit, since the sender is
+        // open. With a `Drain` we can close the receiver and drain any messages
+        // still in the channel.
         chan.join().unwrap();
         assert_eq!(2_usize, counter.load(Ordering::SeqCst));
     }
 
     #[test]
-    fn cancels_infinite_streams() {
+    fn drop_drains_receiver() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+
+        let valve = {
+            // Drop the trigger by letting it fall out of scope.
+            let (_trigger, valve) = valve();
+            valve
+        };
+        let (sender, receiver) = mpsc::unbounded::<()>();
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let msg_counter = counter.clone();
+        sender.unbounded_send(()).unwrap();
+        sender.unbounded_send(()).unwrap();
+
+        let chan = thread::spawn(move || {
+            let task = receiver
+                .drain(valve)
+                .for_each(move |_| {
+                    msg_counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .map_err(|e| eprintln!("receive failed: {:?}", e));
+            // start send-receive channel
+            tokio::run(task);
+        });
+
+        // The receiver thread will normally never exit, since the sender is
+        // open. With a `Drain` we can close the receiver and drain any messages
+        // still in the channel.
+        chan.join().unwrap();
+        assert_eq!(2_usize, counter.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn terminate_cancels_stream() {
         use std::thread;
         use std::time::Duration;
         use tokio::timer::Interval;
@@ -221,6 +236,40 @@ mod tests {
         // repeats forever. With a `Cancel` we can short circuit the stream.
         trigger.terminate();
         interval.join().unwrap();
+    }
+
+    #[test]
+    fn drop_cancels_stream() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+        use std::time::Duration;
+        use tokio::timer::Interval;
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let msg_counter = counter.clone();
+
+        let valve = {
+            // Drop the trigger by letting it fall out of scope.
+            let (_trigger, valve) = valve();
+            valve
+        };
+        let interval = thread::spawn(move || {
+            let task = Interval::new_interval(Duration::from_millis(250))
+                .cancel(valve)
+                .for_each(move |_| {
+                    msg_counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .map_err(|e| eprintln!("interval failed: {:?}", e));
+            // start send-receive channel
+            tokio::run(task);
+        });
+
+        // The interval thread will normally never exit, since the interval is
+        // repeats forever. With a `Cancel` we can short circuit the stream.
+        interval.join().unwrap();
+        assert_eq!(0_usize, counter.load(Ordering::SeqCst));
     }
 
     #[test]
