@@ -2,17 +2,19 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedSender;
-use futures::Future;
 use futures_locks::Mutex;
+use stream_util::Cancelable;
 use tokio_timer::Interval;
 
 use crate::{Command, ConnectState, MediaConnection, SessionLifecycle};
 
 pub fn task(
+    valve: impl Future,
     state: Mutex<ConnectState>,
     tx: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::from_millis(150))
+        .cancel(valve)
         .map_err(|err| warn!("Error on status interval: {:?}", err))
         .and_then(move |_| state.lock())
         .map_err(|err| warn!("Error on connect state lock: {:?}", err))

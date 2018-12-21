@@ -8,10 +8,9 @@ use std::net::SocketAddr;
 
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::sync::oneshot;
 use futures::{future, Future, Stream};
 use futures_locks::Mutex;
-use stream_util::drain;
+use stream_util::{self, Drainable, Trigger};
 use tokio_codec::Framed;
 use tokio_tcp::TcpStream;
 use tokio_tls::{TlsConnector, TlsStream};
@@ -40,7 +39,7 @@ pub enum ChannelMessage {
 #[derive(Debug)]
 pub struct Chromecast {
     command: UnboundedSender<Command>,
-    shutdown: Option<oneshot::Sender<()>>,
+    shutdown: Option<Trigger>,
     status: UnboundedSender<Status>,
     connect: Mutex<ConnectState>,
 }
@@ -87,7 +86,7 @@ impl Chromecast {
     pub fn shutdown(&mut self) {
         let trigger = self.shutdown.take();
         if let Some(trigger) = trigger {
-            let _ = trigger.send(());
+            trigger.terminate();
         }
         if !self.command.is_closed() {
             let _ = self.command.close();
@@ -128,8 +127,8 @@ pub fn connect(
     let (command_tx, command_rx) = unbounded();
     let (status_tx, status_rx) = unbounded();
 
-    let (trigger, shutdown) = oneshot::channel();
-    let shutdown = shutdown.shared();
+    let (trigger, valve) = stream_util::valve();
+    let valve = valve.shared();
 
     let connect = Mutex::new(ConnectState::default());
     let cast = Chromecast {
@@ -148,18 +147,12 @@ pub fn connect(
             command_tx.clone(),
         );
         tokio_executor::spawn(read);
-        let command_rx = drain(command_rx, shutdown.clone().map(|_| ()).map_err(|_| ()));
-        let writer = writer(sink, command_rx).map_err(|_| ()).map(|_| ());
+        let command_rx = command_rx.drain(valve.clone());
+        let writer = writer(sink, command_rx);
         tokio_executor::spawn(writer);
-        let heartbeat = worker::heartbeat::task(command_tx.clone())
-            .select2(shutdown.clone())
-            .map_err(|_| ())
-            .map(|_| ());
+        let heartbeat = worker::heartbeat::task(valve.clone(), command_tx.clone());
         tokio_executor::spawn(heartbeat);
-        let status = worker::status::task(connect.clone(), command_tx.clone())
-            .select2(shutdown.clone())
-            .map_err(|_| ())
-            .map(|_| ());
+        let status = worker::status::task(valve.clone(), connect.clone(), command_tx.clone());
         tokio_executor::spawn(status);
     });
     let init = init.map_err(|err| warn!("error during cast client init: {:?}", err));

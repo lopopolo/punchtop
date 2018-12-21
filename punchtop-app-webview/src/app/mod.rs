@@ -3,19 +3,18 @@ use std::time::Duration;
 use base64;
 use cast_client::{MediaConnection, ReceiverConnection, Status};
 use floating_duration::TimeAsFloat;
-use futures::sync::oneshot;
 use punchtop_audio::chromecast::{CastAddr, Device as CastDevice};
 use punchtop_audio::Track;
 use punchtop_playlist::fs::{FsTrack, Playlist};
 use serde_derive::Serialize;
-use stream_util::{DrainListener, DrainTrigger};
+use stream_util::{self, Trigger, Valve};
 
 pub struct State {
     playlist: Playlist,
     client: Option<CastDevice>,
     connect: Option<ReceiverConnection>,
     session: Option<MediaConnection>,
-    shutdown: Option<DrainTrigger>,
+    shutdown: Option<Trigger>,
     devices: Vec<Device>,
 }
 
@@ -39,8 +38,8 @@ pub struct Controller {
 }
 
 impl Controller {
-    pub fn new(config: Config, playlist: Playlist) -> (Self, DrainListener) {
-        let (trigger, listener) = oneshot::channel();
+    pub fn new(config: Config, playlist: Playlist) -> (Self, Valve) {
+        let (trigger, valve) = stream_util::valve();
         let state = State {
             playlist,
             client: None,
@@ -57,7 +56,7 @@ impl Controller {
                 state,
                 events,
             },
-            listener,
+            valve,
         )
     }
 }
@@ -128,7 +127,7 @@ impl Controller {
             let _ = client.shutdown();
         }
         if let Some(shutdown) = self.state.shutdown.take() {
-            let _ = shutdown.send(());
+            shutdown.terminate();
         }
         self.lifecycle = Lifecycle::Terminating;
     }

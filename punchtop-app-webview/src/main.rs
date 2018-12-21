@@ -14,7 +14,7 @@ use futures::Stream;
 use punchtop_audio::chromecast::{devices, Device};
 use punchtop_playlist::fs;
 use serde_json::to_string;
-use stream_util::drain;
+use stream_util::Drainable;
 use tokio::runtime::Runtime;
 use web_view::*;
 
@@ -29,7 +29,7 @@ fn main() {
     let mut rt = Runtime::new().unwrap();
     let config = Config {
         duration: Duration::new(60, 0),
-        iterations: 30,
+        iterations: 5,
     };
     let player = devices().find(|p| p.name == CAST);
     let player = if let Some(player) = player {
@@ -48,14 +48,16 @@ fn main() {
         }
     };
     rt.spawn(connect);
-    let (mut controller, shutdown) = Controller::new(config, playlist);
+    let (mut controller, valve) = Controller::new(config, playlist);
     controller.set_client(client);
     let controller = Arc::new(Mutex::new(controller));
     let handler_controller = Arc::clone(&controller);
     let io_controller = Arc::clone(&controller);
     let mut webview = web_view::builder()
         .title("Punchtop")
-        .content(Content::Html(include_str!("../../punchtop-ui-react/dist/index.html")))
+        .content(Content::Html(include_str!(
+            "../../punchtop-ui-react/dist/index.html"
+        )))
         .size(480, 720)
         .resizable(false)
         .debug(true)
@@ -89,18 +91,16 @@ fn main() {
         .unwrap();
     webview.set_color((15, 55, 55));
     let ui_handle = webview.handle();
-    let play_loop = drain(chan, shutdown.map_err(|_| ()))
-        .for_each(move |event| {
-            let mut controller = io_controller.lock().map_err(|_| ())?;
-            for event in controller.handle(event) {
-                let _ = ui_handle.dispatch(move |webview| {
-                    dispatch_in_webview(webview, &event);
-                    Ok(())
-                });
-            }
-            Ok(())
-        })
-        .into_future();
+    let play_loop = chan.drain(valve).for_each(move |event| {
+        let mut controller = io_controller.lock().map_err(|_| ())?;
+        for event in controller.handle(event) {
+            let _ = ui_handle.dispatch(move |webview| {
+                dispatch_in_webview(webview, &event);
+                Ok(())
+            });
+        }
+        Ok(())
+    });
     rt.spawn(play_loop);
     loop {
         match webview.step() {
