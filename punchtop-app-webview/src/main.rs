@@ -55,7 +55,7 @@ fn main() {
     let io_controller = Arc::clone(&controller);
     let mut webview = web_view::builder()
         .title("Punchtop")
-        .content(Content::Html(include_str!("../../web-ui/dist/index.html")))
+        .content(Content::Html(include_str!("../../punchtop-ui-react/dist/index.html")))
         .size(480, 720)
         .resizable(false)
         .debug(true)

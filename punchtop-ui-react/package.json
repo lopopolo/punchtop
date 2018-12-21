@@ -1,6 +1,6 @@
 {
-  "name": "web-ui",
-  "version": "0.0.1",
+  "name": "punchtop-ui-react",
+  "version": "0.1.0",
   "main": "index.js",
   "repository": "https://github.com/lopopolo/punchtop",
   "author": "Ryan Lopopolo",
