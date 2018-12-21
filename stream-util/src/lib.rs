@@ -222,4 +222,37 @@ mod tests {
         trigger.terminate();
         interval.join().unwrap();
     }
+
+    #[test]
+    fn cancel_does_not_drain_receiver() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+
+        let (trigger, valve) = valve();
+        let (sender, receiver) = mpsc::unbounded::<()>();
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let msg_counter = counter.clone();
+        sender.unbounded_send(()).unwrap();
+        sender.unbounded_send(()).unwrap();
+
+        // Trigger the cancel before the channel starts consuming messages.
+        // Expect no existing messages to be drained from the channel.
+        trigger.terminate();
+        let chan = thread::spawn(move || {
+            let task = receiver
+                .cancel(valve)
+                .for_each(move |_| {
+                    msg_counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .map_err(|e| eprintln!("receive failed: {:?}", e));
+            // start send-receive channel
+            tokio::run(task);
+        });
+
+        chan.join().unwrap();
+        assert_eq!(0_usize, counter.load(Ordering::SeqCst));
+    }
 }
