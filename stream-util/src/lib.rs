@@ -62,7 +62,7 @@
 //! let chan = thread::spawn(move || {
 //!     let task = receiver
 //!         .drain(valve)
-//!         .for_each(move |_| Ok(()))
+//!         .for_each(|_| Ok(()))
 //!         .map_err(|e| eprintln!("receive failed: {:?}", e));
 //!     // start send-receive channel
 //!     tokio::run(task);
@@ -110,7 +110,7 @@
 //!     tokio::run(task);
 //! });
 //!
-//! // The interval thread will normally never exit, since the interval is repeats
+//! // The interval thread will normally never exit, since the interval repeats
 //! // forever. With a `Cancel` we can short circuit the stream.
 //! trigger.terminate();
 //! interval.join().unwrap();
