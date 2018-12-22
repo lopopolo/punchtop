@@ -119,7 +119,7 @@ fn get_available_port(addr: SocketAddr) -> Result<SocketAddr, Error> {
 
 fn generate_secret_key() -> String {
     // Rocket secret keys are 256 bits
-    let mut data = [0_u8; 32];
+    let mut data = [0; 32];
     thread_rng().fill_bytes(&mut data);
     base64::encode(&data)
 }
