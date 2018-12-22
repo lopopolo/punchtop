@@ -3,14 +3,11 @@ use std::io;
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
-use serde_json::from_str;
 use tokio_codec::{Decoder, Encoder};
 
-use crate::message::namespace;
-use crate::payload::*;
+use crate::message;
 use crate::proto;
 use crate::provider::*;
-use crate::{message, ChannelMessage};
 
 /// Protobuf header is a big endian u32.
 const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
@@ -52,7 +49,7 @@ impl Encoder for CastMessage {
         self.request_id += 1;
         self.encoded_frames += 1;
         trace!(
-            "CastMessageCodec stream=encode frame-counter={} command={:?}",
+            "codec encoded frame {} for command {:?}",
             self.encoded_frames,
             item
         );
@@ -123,7 +120,7 @@ impl CastMessage {
         Some(src.split_to(n))
     }
 
-    fn try_decode(&mut self, src: &mut BytesMut) -> Result<Option<ChannelMessage>, io::Error> {
+    fn try_decode(&mut self, src: &mut BytesMut) -> Result<Option<proto::CastMessage>, io::Error> {
         let n = match self.state {
             DecodeState::Header => match self.decode_header(src) {
                 Some(n) => n,
@@ -132,66 +129,26 @@ impl CastMessage {
             DecodeState::Payload(n) => n,
         };
         self.state = DecodeState::Payload(n);
-        let message = match self.decode_payload(n, src) {
-            Some(mut src) => {
-                self.state = DecodeState::Header;
-                src.reserve(CAST_MESSAGE_HEADER_LENGTH);
-                let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
-                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-                trace!(
-                    "CastMessageCodec stream=decode namespace={}",
-                    message.get_namespace()
-                );
-                match message.get_namespace() {
-                    namespace::CONNECTION => {
-                        from_str::<connection::Response>(message.get_payload_utf8())
-                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                            .map(Box::new)
-                            .map(ChannelMessage::Connection)
-                            .map(Some)
-                    }
-                    namespace::HEARTBEAT => {
-                        from_str::<heartbeat::Response>(message.get_payload_utf8())
-                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                            .map(Box::new)
-                            .map(ChannelMessage::Heartbeat)
-                            .map(Some)
-                    }
-                    namespace::MEDIA => from_str::<media::Response>(message.get_payload_utf8())
-                        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                        .map(Box::new)
-                        .map(ChannelMessage::Media)
-                        .map(Some),
-                    namespace::RECEIVER => {
-                        from_str::<receiver::Response>(message.get_payload_utf8())
-                            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                            .map(Box::new)
-                            .map(ChannelMessage::Receiver)
-                            .map(Some)
-                    }
-                    channel => {
-                        warn!("Received message on unknown channel: {}", channel);
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            Error::UnknownChannel(channel.to_owned()),
-                        ))
-                    }
-                }
-            }
-            None => Ok(None),
-        };
-        self.decoded_frames += 1;
-        trace!(
-            "CastMessageCodec stream=decode frame-counter={} message={:?}",
-            self.decoded_frames,
-            message
-        );
-        message
+        if let Some(mut src) = self.decode_payload(n, src) {
+            self.state = DecodeState::Header;
+            src.reserve(CAST_MESSAGE_HEADER_LENGTH);
+            let message = protobuf::parse_from_bytes::<proto::CastMessage>(&src)
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+            self.decoded_frames += 1;
+            trace!(
+                "codec decoded frame {} for message in namespace {}",
+                self.decoded_frames,
+                message.get_namespace()
+            );
+            Ok(Some(message))
+        } else {
+            Ok(None)
+        }
     }
 }
 
 impl Decoder for CastMessage {
-    type Item = ChannelMessage;
+    type Item = proto::CastMessage;
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {

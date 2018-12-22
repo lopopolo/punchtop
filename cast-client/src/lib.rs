@@ -16,6 +16,7 @@ use tokio_tcp::TcpStream;
 use tokio_tls::{TlsConnector, TlsStream};
 
 mod codec;
+mod handler;
 mod message;
 mod payload;
 #[allow(clippy::all, clippy::pedantic)]
@@ -28,14 +29,6 @@ pub use self::payload::*;
 pub use self::provider::*;
 
 pub(crate) const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
-
-#[derive(Debug)]
-pub(crate) enum ChannelMessage {
-    Connection(Box<connection::Response>),
-    Heartbeat(Box<heartbeat::Response>),
-    Media(Box<media::Response>),
-    Receiver(Box<receiver::Response>),
-}
 
 #[derive(Debug)]
 pub struct Client {
@@ -145,8 +138,8 @@ pub fn connect(
         let read = worker::read(
             source,
             connect.clone(),
-            status_tx.clone(),
             command_tx.clone(),
+            status_tx.clone(),
         );
         tokio_executor::spawn(read);
         let command_rx = command_rx.drain(valve.clone());
