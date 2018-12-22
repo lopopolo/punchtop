@@ -150,8 +150,8 @@ pub fn connect(
         );
         tokio_executor::spawn(read);
         let command_rx = command_rx.drain(valve.clone());
-        let writer = writer(sink, command_rx);
-        tokio_executor::spawn(writer);
+        let write = worker::write(sink, command_rx);
+        tokio_executor::spawn(write);
         let heartbeat = worker::heartbeat(valve.clone(), command_tx.clone());
         tokio_executor::spawn(heartbeat);
         let status = worker::status(valve.clone(), connect.clone(), command_tx.clone());
@@ -159,14 +159,4 @@ pub fn connect(
     });
     let init = init.map_err(|err| warn!("error during cast client init: {:?}", err));
     (cast, status_rx, init)
-}
-
-fn writer(
-    sink: impl Sink<SinkItem = Command, SinkError = io::Error>,
-    command: impl Stream<Item = Command, Error = ()>,
-) -> impl Future<Item = (), Error = ()> {
-    command
-        .forward(sink.sink_map_err(|err| warn!("Error on sink recv: {:?}", err)))
-        .map(|_| ())
-        .map_err(|err| warn!("Error on recv: {:?}", err))
 }
