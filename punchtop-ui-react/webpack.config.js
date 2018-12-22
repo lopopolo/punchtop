@@ -48,7 +48,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.css$/,
-          exclude: /index\.css/,
+          exclude: /index\.css$/,
           use: [
             {
               loader: cssLoader
@@ -65,12 +65,12 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.css$/,
-          include: /index\.css/,
+          include: /index\.css$/,
           use: [cssLoader, "css-loader"]
         },
         {
-          test: /\.(png|jp(e?)g|svg)$/,
-          use: "url-loader"
+          test: /\.(jpe?g|png|gif|svg)$/,
+          use: ["url-loader", "image-webpack-loader"]
         }
       ]
     },
