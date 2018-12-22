@@ -19,48 +19,7 @@ The extension trait `Drainable` provides a new `UnboundedReceiver` combinator,
 `Future` resolves. It then closes the receiver and continues to yield the
 remaining elements in the channel until it is empty.
 
-## Cancel
-
-The extension trait `Cancelable` provides a new `Stream` combinator, `cancel`.
-`Cancel` yields elements from the underlying `Stream` until the provided `Future`
-resolves. It then short circuits the underlying stream by returning
-`Async::Ready(None)`, which stops polling of the underlying `Stream`.
-
-## Trigger
-
-stream-util provides a `trigger` function which returns `(Trigger, Valve)` as a
-convenience for generating a `Future` for the combinators that resolves on
-demand.
-
-## Example: Cancel an Interval
-
-The following code creates an infinite stream from a tokio `Interval` and cancels
-it once 1 second has elapsed.
-
-```rust
-use std::thread;
-use std::time::Duration;
-use futures::Future;
-use stream_util::{valve, Cancelable};
-use tokio::timer::Interval;
-
-let (trigger, valve) = valve();
-let interval = thread::spawn(move || {
-    let task = Interval::new_interval(Duration::from_millis(250))
-        .cancel(valve)
-        .for_each(|_| Ok(()))
-        .map_err(|e| eprintln!("interval failed: {:?}", e));
-    // start send-receive channel
-    tokio::run(task);
-});
-
-// The interval thread will normally never exit, since the interval is repeats
-// forever. With a `Cancel` we can short circuit the stream.
-trigger.terminate();
-interval.join().unwrap();
-```
-
-## Example: Drain a Channel
+### Example: Drain a Channel
 
 The following code creates an unbounded mpsc channel and drains two messages from
 the channel after it has been canceled.
@@ -96,6 +55,47 @@ let chan = thread::spawn(move || {
 // `Drain` we can close the receiver and drain any messages still in the channel.
 chan.join().unwrap();
 ```
+
+## Cancel
+
+The extension trait `Cancelable` provides a new `Stream` combinator, `cancel`.
+`Cancel` yields elements from the underlying `Stream` until the provided `Future`
+resolves. It then short circuits the underlying stream by returning
+`Async::Ready(None)`, which stops polling of the underlying `Stream`.
+
+### Example: Cancel an Interval
+
+The following code creates an infinite stream from a tokio `Interval` and cancels
+it once 1 second has elapsed.
+
+```rust
+use std::thread;
+use std::time::Duration;
+use futures::Future;
+use stream_util::{valve, Cancelable};
+use tokio::timer::Interval;
+
+let (trigger, valve) = valve();
+let interval = thread::spawn(move || {
+    let task = Interval::new_interval(Duration::from_millis(250))
+        .cancel(valve)
+        .for_each(|_| Ok(()))
+        .map_err(|e| eprintln!("interval failed: {:?}", e));
+    // start send-receive channel
+    tokio::run(task);
+});
+
+// The interval thread will normally never exit, since the interval is repeats
+// forever. With a `Cancel` we can short circuit the stream.
+trigger.terminate();
+interval.join().unwrap();
+```
+
+## Trigger
+
+stream-util provides a `trigger` function which returns `(Trigger, Valve)` as a
+convenience for generating a `Future` for the `drain` and `cancel` combinators
+that resolves when triggered.
 
 ## License
 
