@@ -1,11 +1,12 @@
 # stream-util
 
-This crate provides mechanisms for canceling a [`Stream`](https://docs.rs/futures/0.1/futures/stream/trait.Stream.html)
+Crate `stream-util` provides mechanisms for canceling a [`Stream`](https://docs.rs/futures/0.1/futures/stream/trait.Stream.html)
 and draining an [`UnboundedReceiver`](https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html).
 
 ## Usage
 
-To use this crate, add stream-util as a dependency to your project's Cargo.toml:
+To use this crate, add `stream-util` as a dependency to your project's
+`Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -21,12 +22,12 @@ remaining elements in the channel until it is empty.
 
 ### Example: Drain a Channel
 
-The following code creates an unbounded mpsc channel and drains two messages from
-the channel after it has been canceled.
+The following code creates an `mpsc::unbounded` channel and drains two messages
+from the channel after it has been canceled.
 
 ```rust
 use std::thread;
-use futures::Future;
+use futures::{Future, Stream};
 use stream_util::{valve, Drainable};
 use futures::sync::mpsc;
 
@@ -42,10 +43,7 @@ trigger.terminate();
 let chan = thread::spawn(move || {
     let task = receiver
         .drain(valve)
-        .for_each(move |_| {
-            msg_counter.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        })
+        .for_each(move |_| Ok(()))
         .map_err(|e| eprintln!("receive failed: {:?}", e));
     // start send-receive channel
     tokio::run(task);
@@ -65,13 +63,13 @@ resolves. It then short circuits the underlying stream by returning
 
 ### Example: Cancel an Interval
 
-The following code creates an infinite stream from a tokio `Interval` and cancels
-it once 1 second has elapsed.
+The following code creates an infinite stream from a tokio `Interval` and
+cancels it.
 
 ```rust
 use std::thread;
 use std::time::Duration;
-use futures::Future;
+use futures::{Future, Stream};
 use stream_util::{valve, Cancelable};
 use tokio::timer::Interval;
 
