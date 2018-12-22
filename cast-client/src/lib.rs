@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use futures::prelude::*;
 use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{future, Future, Stream};
-use futures_locks::Mutex;
+use futures_locks::RwLock;
 use stream_util::{self, Drainable, Trigger};
 use tokio_codec::Framed;
 use tokio_tcp::TcpStream;
@@ -42,7 +42,7 @@ pub struct Client {
     command: UnboundedSender<Command>,
     shutdown: Option<Trigger>,
     status: UnboundedSender<Status>,
-    connect: Mutex<ConnectState>,
+    connect: RwLock<ConnectState>,
 }
 
 impl Client {
@@ -132,7 +132,7 @@ pub fn connect(
 
     let (trigger, valve) = stream_util::valve();
 
-    let connect = Mutex::new(ConnectState::default());
+    let connect = RwLock::new(ConnectState::default());
     let cast = Client {
         command: command_tx.clone(),
         shutdown: Some(trigger),

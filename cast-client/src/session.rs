@@ -1,5 +1,5 @@
 use futures::prelude::*;
-use futures_locks::Mutex;
+use futures_locks::RwLock;
 
 use crate::{ConnectState, MediaConnection, SessionLifecycle};
 
@@ -7,11 +7,11 @@ use crate::{ConnectState, MediaConnection, SessionLifecycle};
 /// `Some(state)` if the registration caused the media session id to change,
 /// `None` otherwise.
 pub(crate) fn register(
-    state: &Mutex<ConnectState>,
+    state: &RwLock<ConnectState>,
     session: i64,
 ) -> impl Future<Item = Option<MediaConnection>, Error = ()> {
     state
-        .lock()
+        .write()
         .map(move |mut state| {
             if state.set_media_session(Some(session)) {
                 debug!("media session established: {}", session);
@@ -27,9 +27,9 @@ pub(crate) fn register(
 /// Invalidate a media session id. This prevents the `status::task` from
 /// polling for media status when the session is no longer valid (e.g. if a new
 /// load has been schdeduled.
-pub(crate) fn invalidate(state: &Mutex<ConnectState>) -> impl Future<Item = (), Error = ()> {
+pub(crate) fn invalidate(state: &RwLock<ConnectState>) -> impl Future<Item = (), Error = ()> {
     state
-        .lock()
+        .write()
         .map(|mut state| {
             debug!("media session invalidated");
             state.lifecycle = SessionLifecycle::NoMediaSession;

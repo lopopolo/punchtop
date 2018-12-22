@@ -5,7 +5,7 @@ use std::io;
 use futures::prelude::*;
 use futures::sync::mpsc::UnboundedSender;
 use futures::Future;
-use futures_locks::Mutex;
+use futures_locks::RwLock;
 
 use crate::payload::*;
 use crate::session;
@@ -38,7 +38,7 @@ impl fmt::Display for ChannelError {
 
 pub(crate) fn task(
     source: impl Stream<Item = ChannelMessage, Error = io::Error>,
-    connect_state: Mutex<ConnectState>,
+    connect_state: RwLock<ConnectState>,
     status: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
 ) -> impl Future<Item = (), Error = ()> {
@@ -49,7 +49,7 @@ pub(crate) fn task(
 
 fn read(
     message: ChannelMessage,
-    connect: &Mutex<ConnectState>,
+    connect: &RwLock<ConnectState>,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
 ) -> Result<(), io::Error> {
@@ -84,7 +84,7 @@ fn do_heartbeat(
 fn do_media(
     message: media::Response,
     tx: &UnboundedSender<Status>,
-    connect: &Mutex<ConnectState>,
+    connect: &RwLock<ConnectState>,
 ) -> Result<(), ChannelError> {
     use crate::payload::media::Response::*;
     match message {
@@ -124,7 +124,7 @@ fn do_receiver(
     message: receiver::Response,
     tx: UnboundedSender<Status>,
     command: UnboundedSender<Command>,
-    connect: &Mutex<ConnectState>,
+    connect: &RwLock<ConnectState>,
 ) -> Result<(), ChannelError> {
     use crate::payload::receiver::Response::*;
     let ReceiverStatus { status, .. } = message;
@@ -134,7 +134,7 @@ fn do_receiver(
         .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
     let session = app.map(|app| app.session_id.to_owned());
     let transport = app.map(|app| app.transport_id.to_owned());
-    let connect = connect.lock().map(move |mut state| {
+    let connect = connect.write().map(move |mut state| {
         trace!("Acquired connect state lock in receiver status");
         let did_connect =
             state.set_session(session.deref()) && state.set_transport(transport.deref());
