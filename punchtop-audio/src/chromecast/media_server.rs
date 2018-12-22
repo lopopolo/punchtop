@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
 
@@ -43,16 +42,15 @@ impl Route {
     }
 }
 
-struct TrackRegistry(RwLock<HashMap<String, Box<dyn Track + Send + Sync>>>);
+struct TrackRegistry(HashMap<String, Box<dyn Track + Send + Sync>>);
 
 #[allow(clippy::needless_pass_by_value)]
 #[get("/media/<id>")]
 fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<impl Read>> {
     state
         .0
-        .read()
-        .ok()
-        .and_then(|registry| registry.get(&id).and_then(|track| track.stream()))
+        .get(&id)
+        .and_then(|track| track.stream())
         .map(Stream::from)
 }
 
@@ -61,9 +59,8 @@ fn media(id: String, state: State<TrackRegistry>) -> Option<Stream<impl Read>> {
 fn cover(id: String, state: State<TrackRegistry>) -> Option<Stream<Cursor<Vec<u8>>>> {
     state
         .0
-        .read()
-        .ok()
-        .and_then(|registry| registry.get(&id).and_then(|track| track.cover()))
+        .get(&id)
+        .and_then(|track| track.cover())
         .map(|img| img.bytes)
         .map(Cursor::new)
         .map(Stream::from)
@@ -85,7 +82,7 @@ pub fn spawn(
         .unwrap();
     thread::spawn(move || {
         rocket::custom(config)
-            .manage(TrackRegistry(RwLock::new(registry)))
+            .manage(TrackRegistry(registry))
             .mount("/", routes![media, cover])
             .launch();
     });
