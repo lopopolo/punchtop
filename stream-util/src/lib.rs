@@ -7,9 +7,10 @@
 // Copyright (c) 2016 Jon Gjengset
 
 //! Crate `stream-util` provides mechanisms for canceling a [`Stream`] and
-//! draining an [`UnboundedReceiver`].
+//! draining a [`Receiver`] or [`UnboundedReceiver`].
 //!
 //! [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
+//! [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
 //! [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
 //!
 //! # Usage
@@ -24,13 +25,14 @@
 //!
 //! # Drain
 //!
-//! The extension trait [`Drainable`] provides a new [`UnboundedReceiver`]
-//! combinator, [`drain`]. [`Drain`](struct.Drain.html) yields elements from
-//! the underlying channel until the provided [`Future`] resolves. It then
-//! closes the receiver and continues to yield the remaining elements in the
-//! channel until it is empty.
+//! The extension trait [`Drainable`] provides a new [`Receiver`] and
+//! [`UnboundedReceiver`] combinator, [`drain`]. [`Drain`](struct.Drain.html)
+//! yields elements from the underlying channel until the provided [`Future`]
+//! resolves. It then closes the receiver and continues to yield the remaining
+//! elements in the channel until it is empty.
 //!
 //! [`Drainable`]: trait.Drainable.html
+//! [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
 //! [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
 //! [`drain`]: trait.Drainable.html#method.drain
 //! [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
@@ -128,7 +130,7 @@
 
 use futures::future::Shared;
 use futures::prelude::*;
-use futures::sync::mpsc::UnboundedReceiver;
+use futures::sync::mpsc::{Receiver, UnboundedReceiver};
 use futures::sync::oneshot;
 
 /// A remote trigger for canceling or draining a [`Stream`] with a [`Valve`].
@@ -199,9 +201,10 @@ enum DrainState {
     Draining,
 }
 
-/// A `Drain` is a wrapper around [`UnboundedReceiver`] that enables the
-/// receiver to be canceled and fully drained by closing it safely.
+/// A `Drain` is a wrapper around [`Receiver`] and [`UnboundedReceiver`] that
+/// enables the receiver to be canceled and fully drained by closing it safely.
 ///
+/// [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
 /// [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
 #[derive(Debug)]
 pub struct Drain<S, F> {
@@ -231,10 +234,32 @@ where
     }
 }
 
+impl<S, F> Stream for Drain<Receiver<S>, F>
+where
+    F: Future<Item = (), Error = ()>,
+{
+    type Item = S;
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        if self.state == DrainState::Active {
+            if let Ok(Async::Ready(_)) = self.until.poll() {
+                // Drain trigger has resolved, close the underlying stream to
+                // start a graceful drain and return a result indicating the
+                // stream is terminated.
+                self.receiver.close();
+                self.state = DrainState::Draining;
+            }
+        }
+        self.receiver.poll()
+    }
+}
+
 /// `Drainable` is an extension trait that exposes the [`drain`] method for
-/// [`UnboundedReceiver`].
+/// [`Receiver`] and [`UnboundedReceiver`].
 ///
 /// [`drain`]: trait.Drainable.html#method.drain
+/// [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
 /// [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
 pub trait Drainable: Stream {
     /// Create a new `Stream` that wraps the receiver and yields the items
@@ -253,6 +278,7 @@ pub trait Drainable: Stream {
     }
 }
 
+impl<S> Drainable for Receiver<S> {}
 impl<S> Drainable for UnboundedReceiver<S> {}
 
 /// A `Cancel` is a wrapper around [`Stream`] that enables the stream to be
@@ -366,6 +392,43 @@ mod tests {
         sender.unbounded_send(()).unwrap();
         sender.unbounded_send(()).unwrap();
 
+        let chan = thread::spawn(move || {
+            let task = receiver
+                .drain(valve)
+                .for_each(move |_| {
+                    msg_counter.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .map_err(|e| eprintln!("receive failed: {:?}", e));
+            // start send-receive channel
+            tokio::run(task);
+        });
+
+        // The receiver thread will normally never exit, since the sender is
+        // open. With a `Drain` we can close the receiver and drain any messages
+        // still in the channel.
+        chan.join().unwrap();
+        assert_eq!(2_usize, counter.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn terminate_drains_bounded_receiver() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+
+        let (trigger, valve) = valve();
+        let (mut sender, receiver) = mpsc::channel::<()>(1);
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let msg_counter = counter.clone();
+        sender.try_send(()).unwrap();
+        sender.try_send(()).unwrap();
+        assert!(sender.try_send(()).is_err());
+
+        // Trigger the drain before the channel starts consuming messages.
+        // Expect all existing messages to be drained from the channel.
+        trigger.terminate();
         let chan = thread::spawn(move || {
             let task = receiver
                 .drain(valve)

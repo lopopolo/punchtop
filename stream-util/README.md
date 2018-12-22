@@ -1,7 +1,8 @@
 # stream-util
 
 Crate `stream-util` provides mechanisms for canceling a [`Stream`](https://docs.rs/futures/0.1/futures/stream/trait.Stream.html)
-and draining an [`UnboundedReceiver`](https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html).
+and draining a [`Receiver`](https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html)
+or [`UnboundedReceiver`](https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html).
 
 ## Usage
 
@@ -15,10 +16,11 @@ stream-util = { git = "https://github.com/lopopolo/punchtop" }
 
 ## Drain
 
-The extension trait `Drainable` provides a new `UnboundedReceiver` combinator,
-`drain`. `Drain` yields elements from the underlying channel until the provided
-`Future` resolves. It then closes the receiver and continues to yield the
-remaining elements in the channel until it is empty.
+The extension trait `Drainable` provides a new `Receiver` and
+`UnboundedReceiver` combinator, `drain`. `Drain` yields elements from the
+underlying channel until the provided `Future` resolves. It then closes the
+receiver and continues to yield the remaining elements in the channel until it
+is empty.
 
 ### Example: Drain a Channel
 
