@@ -28,9 +28,11 @@ const plugins = [
 module.exports = (env, argv) => {
   let target = "debug";
   let cssLoader = "style-loader";
+  let cssIdentName = "[name]_[local]_[hash:base64]";
   if (argv.mode === "production") {
     target = "release";
     cssLoader = MiniCssExtractPlugin.loader;
+    cssIdentName = "[hash:base64:3]";
   }
   return {
     context: path.resolve(__dirname),
@@ -58,7 +60,7 @@ module.exports = (env, argv) => {
               options: {
                 modules: true,
                 importLoaders: 1,
-                localIdentName: "[name]_[local]_[hash:base64]"
+                localIdentName: cssIdentName
               }
             }
           ]
