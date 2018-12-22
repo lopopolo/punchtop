@@ -118,7 +118,7 @@
 //!
 //! # Trigger and Valve
 //!
-//! The [`valve`](fn.valve.html) function which returns a tuple of
+//! The [`valve`](fn.valve.html) function returns a tuple of
 //! ([`Trigger`], [`Valve`]) as a convenience for generating a [`Future`] for
 //! the [`drain`] and [`cancel`] combinators that resolves when triggered.
 //!
