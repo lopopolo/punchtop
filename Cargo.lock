@@ -918,7 +918,6 @@ dependencies = [
  "floating-duration 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "protobuf-codegen-pure 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "punchtop-audio 0.1.0",
  "punchtop-playlist 0.1.0",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
