@@ -19,11 +19,11 @@ pub(crate) fn task(
         .and_then(move |_| state.read())
         .map_err(|err| warn!("Error on connect state lock: {:?}", err))
         .for_each(move |state| {
-            let _ = tx.unbounded_send(Command::ReceiverStatus);
+            tx.unbounded_send(Command::ReceiverStatus).map_err(|_| ())?;
             if let Some(connect) = state.media_connection() {
-                let _ = tx.unbounded_send(Command::MediaStatus(connect.clone()));
+                tx.unbounded_send(Command::MediaStatus(connect.clone()))
+                    .map_err(|_| ())?;
             }
             Ok(())
         })
-        .map_err(|err| warn!("Error on status: {:?}", err))
 }

@@ -11,5 +11,9 @@ pub(crate) fn task(
     command
         .forward(sink.sink_map_err(|err| warn!("Error on sink write: {:?}", err)))
         .map(|_| ())
-        .map_err(|err| warn!("Error on write: {:?}", err))
+        .or_else(|err| {
+            warn!("Error on write: {:?}", err);
+            // Attempt to recover from errors on the write channel
+            Ok(())
+        })
 }

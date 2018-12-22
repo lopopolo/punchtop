@@ -14,8 +14,16 @@ pub(crate) fn task(
     Interval::new_interval(Duration::new(5, 0))
         .cancel(valve)
         .map(|_| Command::Ping)
-        .map_err(|err| warn!("Error on heartbeat interval: {:?}", err))
+        .or_else(|err| {
+            warn!("Error on heartbeat interval: {:?}", err);
+            // Attempt to recover from errors on the heartbeat channel
+            Ok(Command::Ping) as Result<Command, ()>
+        })
         .forward(command.sink_map_err(|err| warn!("Error on sink heartbeat: {:?}", err)))
         .map(|_| ())
-        .map_err(|err| warn!("Error on heartbeat: {:?}", err))
+        .or_else(|err| {
+            warn!("Error on heartbeat: {:?}", err);
+            // Attempt to recover from errors on the heartbeat channel
+            Ok(())
+        })
 }

@@ -134,27 +134,23 @@ fn do_receiver(
         .find(|app| app.app_id == DEFAULT_MEDIA_RECEIVER_APP_ID);
     let session = app.map(|app| app.session_id.to_owned());
     let transport = app.map(|app| app.transport_id.to_owned());
-    let connect = connect.write().map(move |mut state| {
+    let connect = connect.write().and_then(move |mut state| {
         trace!("Acquired connect state lock in receiver status");
-        let did_connect =
-            state.set_session(session.deref()) && state.set_transport(transport.deref());
-        if let (Some(ref connect), true) = (state.receiver_connection(), did_connect) {
+        if !state.set_session(session.deref()) || !state.set_transport(transport.deref()) {
+            // Connection did not change
+            return Ok(());
+        }
+        if let Some(ref connect) = state.receiver_connection() {
             debug!("Connecting to transport {}", connect.transport);
-            if tx
-                .unbounded_send(Status::Connected(Box::new(connect.clone())))
-                .is_err()
-            {
-                warn!("{}", ChannelError::StatusSend("receiver".to_owned()));
-            }
+            tx.unbounded_send(Status::Connected(Box::new(connect.clone())))
+                .map_err(|_| ())?;
             // we've connected to the default receiver. Now connect to the
             // transport backing the launched app session.
-            if command
+            command
                 .unbounded_send(Command::Connect(connect.clone()))
-                .is_err()
-            {
-                warn!("{}", ChannelError::CommandSend("receiver".to_owned()));
-            }
+                .map_err(|_| ())?;
         }
+        Ok(())
     });
     tokio_executor::spawn(connect);
     Ok(())
