@@ -69,7 +69,7 @@ impl Encoder for CastMessage {
             Command::Pong => message::heartbeat::pong(),
             Command::ReceiverStatus => message::receiver::status(self.request_id),
             Command::Stop(ref connect) => message::media::stop(self.request_id, connect),
-            _ => unimplemented!(),
+            _ => unimplemented!(), // TODO: implement all commands
         };
 
         let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
