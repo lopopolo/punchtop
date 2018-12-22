@@ -91,9 +91,9 @@ trigger.terminate();
 interval.join().unwrap();
 ```
 
-## Trigger
+## Trigger and Valve
 
-stream-util provides a `trigger` function which returns `(Trigger, Valve)` as a
+stream-util provides a `valve` function which returns `(Trigger, Valve)` as a
 convenience for generating a `Future` for the `drain` and `cancel` combinators
 that resolves when triggered.
 
