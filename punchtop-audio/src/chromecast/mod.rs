@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use cast_client::{self, Chromecast, Image, Media, MediaConnection, ReceiverConnection, Status};
+use cast_client::{self, Client, Image, Media, MediaConnection, ReceiverConnection, Status};
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::Future;
 use mdns::RecordKind;
@@ -47,7 +47,7 @@ impl Hash for CastAddr {
 #[derive(Debug)]
 pub struct Device {
     router: Route,
-    cast: Chromecast,
+    cast: Client,
 }
 
 impl Device {

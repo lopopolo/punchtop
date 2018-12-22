@@ -7,7 +7,10 @@ use tokio_timer::Interval;
 
 use crate::Command;
 
-pub fn task(valve: Valve, command: UnboundedSender<Command>) -> impl Future<Item = (), Error = ()> {
+pub(crate) fn task(
+    valve: Valve,
+    command: UnboundedSender<Command>,
+) -> impl Future<Item = (), Error = ()> {
     Interval::new_interval(Duration::new(5, 0))
         .cancel(valve)
         .map(|_| Command::Ping)

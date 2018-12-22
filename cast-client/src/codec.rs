@@ -35,7 +35,7 @@ impl Default for DecodeState {
 }
 
 #[derive(Debug, Default)]
-pub struct CastMessage {
+pub(crate) struct CastMessage {
     state: DecodeState,
     request_id: i64,
     decoded_frames: i64,

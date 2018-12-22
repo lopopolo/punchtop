@@ -21,15 +21,16 @@ mod payload;
 #[allow(clippy::all, clippy::pedantic)]
 mod proto;
 mod provider;
+mod session;
 mod worker;
 
 pub use self::payload::*;
 pub use self::provider::*;
 
-pub const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
+pub(crate) const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
 
 #[derive(Debug)]
-pub enum ChannelMessage {
+pub(crate) enum ChannelMessage {
     Connection(Box<connection::Response>),
     Heartbeat(Box<heartbeat::Response>),
     Media(Box<media::Response>),
@@ -37,14 +38,14 @@ pub enum ChannelMessage {
 }
 
 #[derive(Debug)]
-pub struct Chromecast {
+pub struct Client {
     command: UnboundedSender<Command>,
     shutdown: Option<Trigger>,
     status: UnboundedSender<Status>,
     connect: Mutex<ConnectState>,
 }
 
-impl Chromecast {
+impl Client {
     pub fn launch_app(&self) {
         let launch = Command::Launch {
             app_id: DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned(),
@@ -61,12 +62,14 @@ impl Chromecast {
     pub fn load(&self, connect: &ReceiverConnection, media: Media) {
         let command = self.command.clone();
         let connect = connect.clone();
-        let task = worker::status::invalidate_media_connection(&self.connect);
-        let task = task.map(move |_| {
-            let _ = command.unbounded_send(Command::Load {
-                connect,
-                media: Box::new(media),
-            });
+        let task = session::invalidate(&self.connect);
+        let task = task.and_then(move |_| {
+            command
+                .unbounded_send(Command::Load {
+                    connect,
+                    media: Box::new(media),
+                })
+                .map_err(|_| ())
         });
         tokio_executor::spawn(task);
     }
@@ -120,7 +123,7 @@ fn tls_connect(addr: SocketAddr) -> impl Future<Item = TlsStream<TcpStream>, Err
 pub fn connect(
     addr: SocketAddr,
 ) -> (
-    Chromecast,
+    Client,
     UnboundedReceiver<Status>,
     impl Future<Item = (), Error = ()>,
 ) {
@@ -130,7 +133,7 @@ pub fn connect(
     let (trigger, valve) = stream_util::valve();
 
     let connect = Mutex::new(ConnectState::default());
-    let cast = Chromecast {
+    let cast = Client {
         command: command_tx.clone(),
         shutdown: Some(trigger),
         status: status_tx.clone(),
@@ -139,7 +142,7 @@ pub fn connect(
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, codec::CastMessage::default()).split();
-        let read = worker::read::task(
+        let read = worker::read(
             source,
             connect.clone(),
             status_tx.clone(),
@@ -149,9 +152,9 @@ pub fn connect(
         let command_rx = command_rx.drain(valve.clone());
         let writer = writer(sink, command_rx);
         tokio_executor::spawn(writer);
-        let heartbeat = worker::heartbeat::task(valve.clone(), command_tx.clone());
+        let heartbeat = worker::heartbeat(valve.clone(), command_tx.clone());
         tokio_executor::spawn(heartbeat);
-        let status = worker::status::task(valve.clone(), connect.clone(), command_tx.clone());
+        let status = worker::status(valve.clone(), connect.clone(), command_tx.clone());
         tokio_executor::spawn(status);
     });
     let init = init.map_err(|err| warn!("error during cast client init: {:?}", err));

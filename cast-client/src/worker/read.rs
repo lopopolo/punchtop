@@ -8,7 +8,7 @@ use futures::Future;
 use futures_locks::Mutex;
 
 use crate::payload::*;
-use crate::worker::status::{invalidate_media_connection, register_media_session};
+use crate::session;
 use crate::{ChannelMessage, Command, ConnectState, Status, DEFAULT_MEDIA_RECEIVER_APP_ID};
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ impl fmt::Display for ChannelError {
     }
 }
 
-pub fn task(
+pub(crate) fn task(
     source: impl Stream<Item = ChannelMessage, Error = io::Error>,
     connect_state: Mutex<ConnectState>,
     status: UnboundedSender<Status>,
@@ -94,7 +94,7 @@ fn do_media(
             match media_session {
                 Some(media_session) => {
                     let tx = tx.clone();
-                    let task = register_media_session(connect, media_session);
+                    let task = session::register(connect, media_session);
                     let task = task.and_then(move |connect| {
                         if let Some(connect) = connect {
                             tx.unbounded_send(Status::MediaConnected(Box::new(connect)))
@@ -108,7 +108,7 @@ fn do_media(
                     });
                     tokio_executor::spawn(task)
                 }
-                None => tokio_executor::spawn(invalidate_media_connection(connect)),
+                None => tokio_executor::spawn(session::invalidate(connect)),
             };
             if let Some(state) = status {
                 tx.unbounded_send(Status::MediaState(Box::new(state)))
