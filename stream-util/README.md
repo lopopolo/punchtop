@@ -1,7 +1,7 @@
 # stream-util
 
-This crate provides mechanisms for canceling and draining a
-[`Stream`](https://docs.rs/futures/0.1/futures/stream/trait.Stream.html).
+This crate provides mechanisms for canceling a [`Stream`](https://docs.rs/futures/0.1/futures/stream/trait.Stream.html)
+and draining an [`UnboundedReceiver`](https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html).
 
 ## Usage
 
