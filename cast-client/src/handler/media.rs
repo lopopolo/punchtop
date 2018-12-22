@@ -61,7 +61,7 @@ impl Handler for Media {
                 } else {
                     tokio_executor::spawn(session::invalidate(&self.connect));
                 }
-                if let Some(state) = status {
+                if let (Some(state), false) = (status, self.status.is_closed()) {
                     self.status
                         .unbounded_send(Status::MediaState(Box::new(state)))
                         .map_err(|_| Error::StatusSend)?;
