@@ -43,12 +43,9 @@ pub trait Handler {
             return Err(Error::NamespaceMismatch);
         }
         trace!("found message for {} channel", self.channel());
-        let payload = self.parse_payload(message.get_payload_utf8())?;
+        let payload = serde_json::from_str::<Self::Payload>(message.get_payload_utf8())
+            .map_err(|_| Error::Parse)?;
         self.handle(payload)
-    }
-
-    fn parse_payload(&self, payload: &str) -> Result<Self::Payload, Error> {
-        serde_json::from_str::<Self::Payload>(payload).map_err(|_| Error::Parse)
     }
 }
 
@@ -75,7 +72,6 @@ impl Chain {
     }
 
     pub fn handle(&self, message: &CastMessage) -> Result<(), Error> {
-        trace!("got message on channel {}", message.get_namespace());
         // Try handlers in order of receive frequency
         match self.media.try_handle(message) {
             Err(Error::NamespaceMismatch) => {}
@@ -93,6 +89,7 @@ impl Chain {
             Err(Error::NamespaceMismatch) => {}
             response => return response,
         };
+        warn!("got message on unknown channel {}", message.get_namespace());
         Err(Error::UnknownPayload)
     }
 }
