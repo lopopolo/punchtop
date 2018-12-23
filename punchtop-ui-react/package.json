@@ -54,7 +54,7 @@
     "build-release": "webpack --mode production",
     "dev": "webpack-dev-server --mode development --open",
     "lint": "eslint --ignore-path .gitignore --fix .",
-    "fmt": "prettier --ignore-path .gitignore --write '**/*.{css,html,js,json,md}'"
+    "fmt": "prettier --ignore-path .gitignore --write '**/*.{babelrc,css,eslintrc,html,js,json,md}'"
   },
   "sideEffects": [
     "*.css"
