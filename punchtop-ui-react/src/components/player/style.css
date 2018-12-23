@@ -1,3 +1,19 @@
+.fallbackCover {
+  height: auto;
+  max-width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  margin: auto;
+  font-size: 10em;
+  background-color: darkgray;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .time {
   width: 100%;
 }

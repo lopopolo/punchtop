@@ -1,15 +1,13 @@
 import React from "react";
 import { PlayerIcon } from "react-player-controls";
-import Img from "react-image";
 
 import style from "./style.css";
-import { ElapsedBar, Spacer } from "..";
-import fallbackCover from "../../../assets/fallback-cover.png";
+import { ElapsedBar, FallbackCover, Spacer } from "..";
 
 const Player = ({ duration }) => (
   <div>
     <div className={style.coverContainer}>
-      <Img alt="Punchtop" className={style.cover} src={[fallbackCover]} />
+      <FallbackCover />
     </div>
     <Spacer height="0.75em" />
     <div className={style.metadata}>

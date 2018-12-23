@@ -10,6 +10,14 @@ import { togglePlayback } from "../../actions";
 
 export const Spacer = ({ height }) => <div style={{ height }} />;
 
+export const FallbackCover = () => (
+  <div className={style.fallbackCover}>
+    <span role="img" aria-label="Album cover">
+      🎵
+    </span>
+  </div>
+);
+
 export const ElapsedBar = ({ elapsed, duration }) => (
   <div className={style.time}>
     <div className={style.timestamps}>

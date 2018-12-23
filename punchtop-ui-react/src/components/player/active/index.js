@@ -4,8 +4,7 @@ import ReactCSSTransitionReplace from "react-css-transition-replace";
 import Img from "react-image";
 
 import style from "./style.css";
-import { ElapsedBar, Spacer } from "..";
-import fallbackCover from "../../../assets/fallback-cover.png";
+import { ElapsedBar, FallbackCover, Spacer } from "..";
 
 const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
   <div>
@@ -18,7 +17,8 @@ const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
         <Img
           alt={[media.artist, media.title].filter(item => item).join(" - ")}
           className={style.cover}
-          src={[media.cover && media.cover.url, fallbackCover]}
+          src={[media.cover && media.cover.url]}
+          unloader={<FallbackCover />}
         />
       </div>
     </ReactCSSTransitionReplace>
