@@ -21,7 +21,7 @@ mod codec;
 mod proto;
 mod provider;
 mod session;
-mod worker;
+mod task;
 
 pub use self::provider::*;
 
@@ -132,20 +132,19 @@ pub fn connect(
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, codec::CastMessage::default()).split();
-        let read = worker::read(
+        tokio_executor::spawn(task::respond(
             source,
             connect.clone(),
             command_tx.clone(),
             status_tx.clone(),
-        );
-        tokio_executor::spawn(read);
-        let command_rx = command_rx.drain(valve.clone());
-        let write = worker::write(sink, command_rx);
-        tokio_executor::spawn(write);
-        let heartbeat = worker::heartbeat(valve.clone(), command_tx.clone());
-        tokio_executor::spawn(heartbeat);
-        let status = worker::status(valve.clone(), connect.clone(), command_tx.clone());
-        tokio_executor::spawn(status);
+        ));
+        tokio_executor::spawn(task::send(sink, command_rx.drain(valve.clone())));
+        tokio_executor::spawn(task::keepalive(valve.clone(), command_tx.clone()));
+        tokio_executor::spawn(task::poll_status(
+            valve.clone(),
+            connect.clone(),
+            command_tx.clone(),
+        ));
     });
     let init = init.map_err(|err| warn!("error during cast client init: {:?}", err));
     (cast, status_rx, init)
