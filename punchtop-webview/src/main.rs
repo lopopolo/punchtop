@@ -56,7 +56,7 @@ fn main() {
     let mut webview = web_view::builder()
         .title("Punchtop")
         .content(Content::Html(include_str!(
-            "../../punchtop-ui-react/target/release/index.html"
+            "../../punchtop-react/target/release/index.html"
         )))
         .size(480, 720)
         .resizable(false)

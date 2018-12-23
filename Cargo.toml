@@ -1,8 +1,8 @@
 [workspace]
 members = [
   "cast-client",
-  "punchtop-app-webview",
   "punchtop-audio",
   "punchtop-playlist",
+  "punchtop-webview",
   "stream-util",
 ]
