@@ -11,7 +11,7 @@ protobuf-codegen-pure = "2"
 byteorder = "1"
 bytes = "0.4"
 futures = "0.1"
-futures-locks = "0.3"
+futures-locks = { version = "0.3", default-features = false }
 log = "0.4"
 native-tls = "0.2"
 protobuf = "2"
