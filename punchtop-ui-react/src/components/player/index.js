@@ -1,11 +1,11 @@
 import React from "react";
-import { connect } from "react-redux";
 import ReactCSSTransitionReplace from "react-css-transition-replace";
+import Img from "react-image";
+import { PlayerIcon } from "react-player-controls";
+import { connect } from "react-redux";
 import format from "format-duration";
 
 import style from "./style.css";
-import Active from "./active";
-import Idle from "./idle";
 import { togglePlayback } from "../../actions";
 
 export const Spacer = ({ height }) => <div style={{ height }} />;
@@ -34,7 +34,7 @@ export const ElapsedBar = ({ elapsed, duration }) => (
   </div>
 );
 
-const Player = ({ media, ...props }) => (
+const Player = ({ media, isPlaying, elapsed, duration, toggle }) => (
   <div>
     <ReactCSSTransitionReplace
       transitionName="cross-fade"
@@ -42,7 +42,53 @@ const Player = ({ media, ...props }) => (
       transitionLeaveTimeout={300}
     >
       <div key={media ? "active" : "idle"}>
-        {media ? <Active media={media} {...props} /> : <Idle {...props} />}
+        <div>
+          <ReactCSSTransitionReplace
+            transitionName="cross-fade"
+            transitionEnterTimeout={300}
+            transitionLeaveTimeout={300}
+          >
+            <div key={media?.id || "fallback"} className={style.coverContainer}>
+              <Img
+                alt={
+                  [media?.artist, media?.title]
+                    .filter(item => item)
+                    .join(" - ") || "Punchtop"
+                }
+                className={style.cover}
+                src={[media?.cover?.url]}
+                unloader={<FallbackCover />}
+              />
+            </div>
+          </ReactCSSTransitionReplace>
+          <Spacer height="0.75em" />
+          <div className={style.metadata}>
+            <div className={style.title}>{media?.title}</div>
+            <Spacer height="0.4em" />
+            <div className={style.artist}>{media?.artist}</div>
+          </div>
+          <Spacer height="0.75em" />
+          <div className={style.player}>
+            <ElapsedBar
+              key={media?.id || "fallback"}
+              elapsed={elapsed}
+              duration={duration}
+            />
+            <Spacer height="0.75em" />
+            <button
+              className={style.toggle}
+              type="button"
+              onClick={toggle}
+              disabled={!media}
+            >
+              {isPlaying ? (
+                <PlayerIcon.Pause width={32} height={32} fill="lightgray" />
+              ) : (
+                <PlayerIcon.Play width={32} height={32} fill="lightgray" />
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </ReactCSSTransitionReplace>
   </div>
