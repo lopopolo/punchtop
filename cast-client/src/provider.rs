@@ -3,7 +3,7 @@ use std::fmt;
 
 use url::Url;
 
-use crate::payload::media::MediaStatus;
+use crate::channel::media::MediaStatus;
 
 #[derive(Clone, Debug)]
 pub struct Media {

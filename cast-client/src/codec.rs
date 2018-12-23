@@ -3,9 +3,10 @@ use std::io;
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
+use protobuf::{CodedOutputStream, Message};
 use tokio_codec::{Decoder, Encoder};
 
-use crate::message;
+use crate::channel;
 use crate::proto;
 use crate::provider::*;
 
@@ -54,24 +55,26 @@ impl Encoder for CastMessage {
             item
         );
         let message = match item {
-            Command::Connect(connect) => message::connection::connect(&connect.transport),
-            Command::Launch { app_id } => message::receiver::launch(self.request_id, &app_id),
+            Command::Connect(connect) => channel::connection::connect(&connect.transport),
+            Command::Launch { app_id } => channel::receiver::launch(self.request_id, &app_id),
             Command::Load { connect, media } => {
-                message::media::load(self.request_id, &connect, *media)
+                channel::media::load(self.request_id, &connect, *media)
             }
-            Command::MediaStatus(connect) => message::media::status(self.request_id, &connect),
-            Command::Pause(ref connect) => message::media::pause(self.request_id, &connect),
-            Command::Ping => message::heartbeat::ping(),
-            Command::Play(ref connect) => message::media::play(self.request_id, &connect),
-            Command::Pong => message::heartbeat::pong(),
-            Command::ReceiverStatus => message::receiver::status(self.request_id),
-            Command::Stop(ref connect) => message::media::stop(self.request_id, connect),
+            Command::MediaStatus(connect) => channel::media::status(self.request_id, &connect),
+            Command::Pause(ref connect) => channel::media::pause(self.request_id, &connect),
+            Command::Ping => channel::heartbeat::ping(),
+            Command::Play(ref connect) => channel::media::play(self.request_id, &connect),
+            Command::Pong => channel::heartbeat::pong(),
+            Command::ReceiverStatus => channel::receiver::status(self.request_id),
+            Command::Stop(ref connect) => channel::media::stop(self.request_id, connect),
             _ => unimplemented!(), // TODO: implement all commands
         };
 
-        let message = message.map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let mut buf = Vec::new();
-        message::encode(&message, &mut buf)
+        let mut output = CodedOutputStream::new(&mut buf);
+        message
+            .write_to(&mut output)
+            .and_then(|_| output.flush())
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
         if buf.len() > CAST_MESSAGE_PROTOBUF_MAX_LENGTH {

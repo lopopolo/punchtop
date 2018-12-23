@@ -5,7 +5,7 @@ use futures::sync::mpsc::UnboundedSender;
 use futures::Future;
 use futures_locks::RwLock;
 
-use crate::handler::Chain;
+use crate::channel::Responder;
 use crate::proto::CastMessage;
 use crate::{Command, ConnectState, Status};
 
@@ -15,14 +15,14 @@ pub(crate) fn task(
     command: UnboundedSender<Command>,
     status: UnboundedSender<Status>,
 ) -> impl Future<Item = (), Error = ()> {
-    let handler = Chain::new(connect, command, status);
+    let responder = Responder::new(connect, command, status);
     source
         .for_each(move |message| {
-            if let Err(err) = handler.handle(&message) {
-                warn!("read handler error: {:?}", err);
+            if let Err(err) = responder.handle(&message) {
+                warn!("responder handler error: {:?}", err);
                 return Err(io::Error::new(io::ErrorKind::Other, err));
             }
             Ok(())
         })
-        .map_err(|err| warn!("Error on read: {:?}", err))
+        .map_err(|err| warn!("Error on responder: {:?}", err))
 }

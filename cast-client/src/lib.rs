@@ -15,17 +15,14 @@ use tokio_codec::Framed;
 use tokio_tcp::TcpStream;
 use tokio_tls::{TlsConnector, TlsStream};
 
+mod channel;
 mod codec;
-mod handler;
-mod message;
-mod payload;
 #[allow(clippy::all, clippy::pedantic)]
 mod proto;
 mod provider;
 mod session;
 mod worker;
 
-pub use self::payload::*;
 pub use self::provider::*;
 
 pub(crate) const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
@@ -46,8 +43,8 @@ impl Client {
         let _ = self
             .command
             .unbounded_send(Command::Connect(ReceiverConnection {
-                session: message::DEFAULT_DESTINATION_ID.to_owned(),
-                transport: message::DEFAULT_DESTINATION_ID.to_owned(),
+                session: channel::DEFAULT_DESTINATION_ID.to_owned(),
+                transport: channel::DEFAULT_DESTINATION_ID.to_owned(),
             }))
             .and_then(|_| self.command.unbounded_send(launch));
     }
