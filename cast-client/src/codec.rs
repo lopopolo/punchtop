@@ -8,7 +8,7 @@ use tokio_codec::{Decoder, Encoder};
 
 use crate::channel;
 use crate::proto;
-use crate::provider::*;
+use crate::provider::Command::{self, *};
 
 /// Protobuf header is a big endian u32.
 const CAST_MESSAGE_HEADER_LENGTH: usize = 4;
@@ -55,18 +55,16 @@ impl Encoder for CastMessage {
             item
         );
         let message = match item {
-            Command::Connect(connect) => channel::connection::connect(&connect.transport),
-            Command::Launch { app_id } => channel::receiver::launch(self.request_id, &app_id),
-            Command::Load { connect, media } => {
-                channel::media::load(self.request_id, &connect, *media)
-            }
-            Command::MediaStatus(connect) => channel::media::status(self.request_id, &connect),
-            Command::Pause(ref connect) => channel::media::pause(self.request_id, &connect),
-            Command::Ping => channel::heartbeat::ping(),
-            Command::Play(ref connect) => channel::media::play(self.request_id, &connect),
-            Command::Pong => channel::heartbeat::pong(),
-            Command::ReceiverStatus => channel::receiver::status(self.request_id),
-            Command::Stop(ref connect) => channel::media::stop(self.request_id, connect),
+            Connect(connect) => channel::connection::connect(&connect.transport),
+            Launch { app_id } => channel::receiver::launch(self.request_id, &app_id),
+            Load { connect, media } => channel::media::load(self.request_id, &connect, *media),
+            MediaStatus(connect) => channel::media::status(self.request_id, &connect),
+            Pause(connect) => channel::media::pause(self.request_id, &connect),
+            Ping => channel::heartbeat::ping(),
+            Play(connect) => channel::media::play(self.request_id, &connect),
+            Pong => channel::heartbeat::pong(),
+            ReceiverStatus => channel::receiver::status(self.request_id),
+            Stop(connect) => channel::media::stop(self.request_id, &connect),
             _ => unimplemented!(), // TODO: implement all commands
         };
 
