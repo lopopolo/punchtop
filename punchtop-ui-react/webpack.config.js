@@ -50,7 +50,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.css$/,
-          exclude: /index\.css$/,
+          exclude: [path.resolve(__dirname, "src/index.css")],
           use: [
             {
               loader: cssLoader
@@ -67,7 +67,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.css$/,
-          include: /index\.css$/,
+          include: [path.resolve(__dirname, "src/index.css")],
           use: [cssLoader, "css-loader"]
         },
         {
