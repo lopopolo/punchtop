@@ -6,7 +6,7 @@ use crate::{ConnectState, MediaConnection, SessionLifecycle};
 /// Register a media session id with the global connection state. Returns
 /// `Some(state)` if the registration caused the media session id to change,
 /// `None` otherwise.
-pub(crate) fn register(
+pub fn register(
     state: &RwLock<ConnectState>,
     session: i64,
 ) -> impl Future<Item = Option<MediaConnection>, Error = ()> {
@@ -27,7 +27,7 @@ pub(crate) fn register(
 /// Invalidate a media session id. This prevents the `status::task` from
 /// polling for media status when the session is no longer valid (e.g. if a new
 /// load has been schdeduled.
-pub(crate) fn invalidate(state: &RwLock<ConnectState>) -> impl Future<Item = (), Error = ()> {
+pub fn invalidate(state: &RwLock<ConnectState>) -> impl Future<Item = (), Error = ()> {
     state
         .write()
         .map(|mut state| {

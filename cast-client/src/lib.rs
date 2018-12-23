@@ -25,8 +25,6 @@ mod task;
 
 pub use self::provider::*;
 
-pub(crate) const DEFAULT_MEDIA_RECEIVER_APP_ID: &str = "CC1AD845";
-
 #[derive(Debug)]
 pub struct Client {
     command: UnboundedSender<Command>,
@@ -38,7 +36,7 @@ pub struct Client {
 impl Client {
     pub fn launch_app(&self) {
         let launch = Command::Launch {
-            app_id: DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned(),
+            app_id: channel::DEFAULT_MEDIA_RECEIVER_APP_ID.to_owned(),
         };
         let _ = self
             .command
