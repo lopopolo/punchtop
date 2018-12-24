@@ -22,7 +22,7 @@ mod app;
 
 use crate::app::{Config, Controller, Event, Lifecycle};
 
-const CAST: &str = "Kitchen Home";
+const CAST: &str = "Kitchen Speaker";
 
 fn main() {
     env_logger::init();
