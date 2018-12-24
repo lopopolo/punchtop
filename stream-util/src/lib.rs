@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![deny(missing_docs, warnings)]
 // stream-util is based on stream-cancel@0.4.4
 // <https://github.com/jonhoo/stream-cancel>
 //
@@ -6,12 +6,10 @@
 //
 // Copyright (c) 2016 Jon Gjengset
 
-//! Crate `stream-util` provides mechanisms for canceling a [`Stream`] and
-//! draining a [`Receiver`] or [`UnboundedReceiver`].
-//!
-//! [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
-//! [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
-//! [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
+//! Crate `stream-util` provides mechanisms for canceling a
+//! [`Stream`](futures::stream::Stream) and draining a
+//! [`Receiver`](futures::sync::mpsc::Receiver) or
+//! [`UnboundedReceiver`](futures::sync::mpsc::UnboundedReceiver).
 //!
 //! # Usage
 //!
@@ -25,24 +23,19 @@
 //!
 //! # Drain
 //!
-//! The extension trait [`Drainable`] provides a new [`Receiver`] and
-//! [`UnboundedReceiver`] combinator, [`drain`]. [`Drain`](struct.Drain.html)
-//! yields elements from the underlying channel until the provided [`Future`]
-//! resolves. It then closes the receiver and continues to yield the remaining
-//! elements in the channel until it is empty.
-//!
-//! [`Drainable`]: trait.Drainable.html
-//! [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
-//! [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
-//! [`drain`]: trait.Drainable.html#method.drain
-//! [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
+//! The extension trait [`Drainable`](crate::Drainable) provides a new
+//! [`Receiver`](futures::sync::mpsc::Receiver) and
+//! [`UnboundedReceiver`](futures::sync::mpsc::UnboundedReceiver) combinator,
+//! [`drain`](crate::Drainable::drain). [`Drain`](crate::Drain) yields elements
+//! from the underlying channel until the provided
+//! [`Future`](futures::future::Future) resolves. It then closes the receiver
+//! and continues to yield the remaining elements in the channel until it is
+//! empty.
 //!
 //! ## Example: Drain a Channel
 //!
-//! The following code creates an [`mpsc::unbounded`] channel and drains two
-//! messages from the channel after it has been canceled.
-//!
-//! [`mpsc::unbounded`]: https://docs.rs/futures/0.1/futures/sync/mpsc/fn.unbounded.html
+//! The following code creates an [`mpsc::unbounded`](futures::sync::mpsc::unbounded)
+//! channel and drains two messages from the channel after it has been canceled.
 //!
 //! ```rust
 //! use std::thread;
@@ -75,23 +68,19 @@
 //!
 //! # Cancel
 //!
-//! The extension trait [`Cancelable`] provides a new [`Stream`] combinator,
-//! [`cancel`]. [`Cancel`](struct.Cancel.html) yields elements from the
-//! underlying [`Stream`] until the provided [`Future`] resolves. It then short
-//! circuits the underlying stream by returning `Async::Ready(None)`, which
-//! stops polling of the underlying [`Stream`].
+//! The extension trait [`Cancelable`](crate::Cancelable) provides a new
+//! [`Stream`](futures::stream::Stream) combinator,
+//! [`cancel`](crate::Cancelable::cancel). [`Cancel`](crate::Cancel) yields
+//! elements from the underlying [`Stream`](futures::stream::Stream) until the
+//! provided [`Future`](futures::future::Future) resolves. It then
+//! short-circuits the underlying stream by returning `Async::Ready(None)`,
+//! which stops polling of the underlying [`Stream`](futures::stream::Stream).
 //!
-//! [`Cancelable`]: trait.Cancelable.html
-//! [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
-//! [`cancel`]: trait.Cancelable.html#method.cancel
-//! [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
+//! ## Example: Cancel an Interval
 //!
-//! ### Example: Cancel an Interval
-//!
-//! The following code creates an infinite stream from a tokio [`Interval`] and
-//! cancels it.
-//!
-//! [`Interval`]: https://docs.rs/tokio/0.1/tokio/timer/struct.Interval.html
+//! The following code creates an infinite stream from a `tokio`
+//! [`Interval`](https://docs.rs/tokio/0.1/tokio/timer/struct.Interval.html)
+//! and cancels it.
 //!
 //! ```rust
 //! use std::thread;
@@ -118,34 +107,26 @@
 //!
 //! # Trigger and Valve
 //!
-//! The [`valve`](fn.valve.html) function returns a tuple of
-//! ([`Trigger`], [`Valve`]) as a convenience for generating a [`Future`] for
-//! the [`drain`] and [`cancel`] combinators that resolves when triggered.
-//!
-//! [`Trigger`]: struct.Trigger.html
-//! [`Valve`]: struct.Valve.html
-//! [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
-//! [`drain`]: trait.Drainable.html#method.drain
-//! [`cancel`]: trait.Cancelable.html#method.cancel
+//! The [`valve`](crate::valve) function returns a tuple of
+//! ([`Trigger`](crate::Trigger), [`Valve`](crate::Valve)) as a convenience for
+//! generating a [`Future`](futures::future::Future) for the
+//! [`drain`](crate::Drainable::drain) and [`cancel`](crate::Cancelable::cancel)
+//! combinators that resolves when triggered.
 
 use futures::future::Shared;
 use futures::prelude::*;
 use futures::sync::mpsc::{Receiver, UnboundedReceiver};
 use futures::sync::oneshot;
 
-/// A remote trigger for canceling or draining a [`Stream`] with a [`Valve`].
-/// `Trigger` implements [`Drop`] and will trigger when it goes out of scope.
-///
-/// [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
-/// [`Valve`]: struct.Valve.html
-/// [`Drop`]: https://doc.rust-lang.org/std/ops/trait.Drop.html
+/// A remote trigger for canceling or draining a
+/// [`Stream`](futures::stream::Stream) with a [`Valve`](crate::Valve).
+/// `Trigger` implements [`Drop`](std::ops::Drop) and will trigger when it goes
+/// out of scope.
 #[derive(Debug)]
 pub struct Trigger(Option<oneshot::Sender<()>>);
 
 impl Trigger {
-    /// Consume the `Trigger` and terminate the linked [`Valve`].
-    ///
-    /// [`Valve`]: struct.Valve.html
+    /// Consume the `Trigger` and resolve the linked [`Valve`](crate::Valve).
     pub fn terminate(self) {
         drop(self);
     }
@@ -159,17 +140,15 @@ impl Drop for Trigger {
     }
 }
 
-/// Cancel or drain a [`Stream`] when triggered by a [`Trigger`]. `Valve`
-/// implements a unit [`Future`] enabling it to be used with the [`drain`] and
-/// [`cancel`] combinators.
+/// Cancel or drain a [`Stream`](futures::stream::Stream) when triggered by a
+/// [`Trigger`](crate::Trigger).
 ///
-/// Valve is cloneable and may be used with mutliple [`Stream`]s.
+/// `Valve` implements a unit [`Future`](futures::future::Future) enabling it
+/// to be used with the [`drain`](crate::Drainable::drain) and
+/// [`cancel`](crate::Cancelable::cancel) combinators.
 ///
-/// [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
-/// [`Trigger`]: struct.Trigger.html
-/// [`Future`]: https://docs.rs/futures/0.1/futures/future/trait.Future.html
-/// [`drain`]: trait.Drainable.html#method.drain
-/// [`cancel`]: trait.Cancelable.html#method.cancel
+/// `Valve` is cloneable and may be used with multiple
+/// [`Stream`](futures::stream::Stream)s.
 #[derive(Clone, Debug)]
 pub struct Valve(Shared<oneshot::Receiver<()>>);
 
@@ -186,10 +165,7 @@ impl Future for Valve {
     }
 }
 
-/// Create a matching [`Trigger`] and [`Valve`].
-///
-/// [`Trigger`]: struct.Trigger.html
-/// [`Valve`]: struct.Valve.html
+/// Create a matching [`Trigger`](crate::Trigger) and [`Valve`](crate::Valve).
 pub fn valve() -> (Trigger, Valve) {
     let (trigger, valve) = oneshot::channel();
     (Trigger(Some(trigger)), Valve(valve.shared()))
@@ -201,11 +177,9 @@ enum DrainState {
     Draining,
 }
 
-/// A `Drain` is a wrapper around [`Receiver`] and [`UnboundedReceiver`] that
+/// A `Drain` is a wrapper around [`Receiver`](futures::sync::mpsc::Receiver)
+/// and [`UnboundedReceiver`](futures::sync::mpsc::UnboundedReceiver) that
 /// enables the receiver to be canceled and fully drained by closing it safely.
-///
-/// [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
-/// [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
 #[derive(Debug)]
 pub struct Drain<S, F> {
     receiver: S,
@@ -255,16 +229,15 @@ where
     }
 }
 
-/// `Drainable` is an extension trait that exposes the [`drain`] method for
-/// [`Receiver`] and [`UnboundedReceiver`].
-///
-/// [`drain`]: trait.Drainable.html#method.drain
-/// [`Receiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.Receiver.html
-/// [`UnboundedReceiver`]: https://docs.rs/futures/0.1/futures/sync/mpsc/struct.UnboundedReceiver.html
+/// `Drainable` is an extension trait that exposes the
+/// [`drain`](crate::Drainable::drain) method for
+/// [`Receiver`](futures::sync::mpsc::Receiver) and
+/// [`UnboundedReceiver`](futures::sync::mpsc::UnboundedReceiver).
 pub trait Drainable: Stream {
-    /// Create a new `Stream` that wraps the receiver and yields the items
-    /// from the receiver until `trigger` resolves. When `trigger` resolves,
-    /// close the receiver and drain any outstanding messages.
+    /// Create a new [`Stream`](futures::stream::Stream) that wraps the
+    /// receiver and yields the items from the receiver until `trigger`
+    /// resolves. When `trigger` resolves, close the receiver and drain any
+    /// outstanding messages.
     fn drain<F>(self, trigger: F) -> Drain<Self, F::Future>
     where
         F: IntoFuture<Item = (), Error = ()>,
@@ -281,10 +254,8 @@ pub trait Drainable: Stream {
 impl<S> Drainable for Receiver<S> {}
 impl<S> Drainable for UnboundedReceiver<S> {}
 
-/// A `Cancel` is a wrapper around [`Stream`] that enables the stream to be
-/// canceled and terminated.
-///
-/// [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
+/// A `Cancel` is a wrapper around [`Stream`](futures::stream::Stream) that
+/// enables the stream to be canceled and terminated.
 #[derive(Debug)]
 pub struct Cancel<S, F> {
     stream: S,
@@ -309,15 +280,14 @@ where
     }
 }
 
-/// `Cancelable` is an extension trait that exposes the [`cancel`] method for
-/// [`Stream`].
-///
-/// [`cancel`]: trait.Cancelable.html#method.cancel
-/// [`Stream`]: https://docs.rs/futures/0.1/futures/stream/trait.Stream.html
+/// `Cancelable` is an extension trait that exposes the
+/// [`cancel`](crate::Cancelable::cancel) method for
+/// [`Stream`](futures::stream::Stream).
 pub trait Cancelable: Stream {
-    /// Create a new `Stream` that wraps the receiver and yields the items
-    /// from the receiver until `trigger` resolves. When `trigger` resolves,
-    /// short circuit the stream by returning `Async::Ready(None)`.
+    /// Create a new [`Stream`](futures::stream::Stream) that wraps the receiver
+    /// and yields the items from the receiver until `trigger` resolves. When
+    /// `trigger` resolves, short circuit the stream by returning
+    /// `Async::Ready(None)`.
     fn cancel<F>(self, trigger: F) -> Cancel<Self, F::Future>
     where
         F: IntoFuture<Item = (), Error = ()>,
