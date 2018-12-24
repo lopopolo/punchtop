@@ -3,6 +3,9 @@ name = "cast-client"
 version = "0.1.0"
 authors = ["Ryan Lopopolo <rjl@hyperbo.la>"]
 edition = "2018"
+keywords = ["audio", "chromecast", "tokio"]
+categories = ["multimedia::audio"]
+license = "MIT"
 
 [build-dependencies]
 protobuf-codegen-pure = "2"
