@@ -1,5 +1,4 @@
 use futures::sync::mpsc::UnboundedSender;
-use futures::Future;
 use futures_locks::RwLock;
 use serde_derive::{Deserialize, Serialize};
 
@@ -55,7 +54,7 @@ impl channel::Handler for Handler {
         let transport = app.map(|app| app.transport_id.to_owned());
         let status = self.status.clone();
         let command = self.command.clone();
-        let connect = self.connect.write().and_then(move |mut state| {
+        let connect = self.connect.with_write(move |mut state| {
             trace!("acquired connect state lock in receiver channel");
             if !state.set_session(session.deref()) || !state.set_transport(transport.deref()) {
                 // Connection did not change
@@ -74,7 +73,7 @@ impl channel::Handler for Handler {
             }
             Ok(())
         });
-        tokio_executor::spawn(connect);
+        tokio_executor::spawn(connect.expect("lock spawn"));
         Ok(())
     }
 }
