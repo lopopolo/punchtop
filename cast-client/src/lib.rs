@@ -1,4 +1,5 @@
 #![feature(inner_deref, try_from)]
+#![warn(clippy::all, clippy::pedantic)]
 
 #[macro_use]
 extern crate log;
@@ -130,12 +131,7 @@ pub fn connect(
     let init = tls_connect(addr).map(move |socket| {
         info!("TLS connection established");
         let (sink, source) = Framed::new(socket, codec::CastMessage::default()).split();
-        tokio_executor::spawn(task::respond(
-            source,
-            connect.clone(),
-            command_tx.clone(),
-            status_tx.clone(),
-        ));
+        tokio_executor::spawn(task::respond(source, &connect, &command_tx, &status_tx));
         tokio_executor::spawn(task::send(sink, command_rx.drain(valve.clone())));
         tokio_executor::spawn(task::keepalive(valve.clone(), command_tx.clone()));
         tokio_executor::spawn(task::poll_status(

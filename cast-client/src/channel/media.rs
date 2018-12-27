@@ -155,6 +155,7 @@ pub enum ResumeState {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::stutter)]
 pub struct MediaInformation {
     pub content_id: String,
     pub stream_type: StreamType,
@@ -246,6 +247,7 @@ pub struct CustomData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::stutter)]
 pub struct MediaStatus {
     pub media_session_id: i64,
     #[serde(default)]

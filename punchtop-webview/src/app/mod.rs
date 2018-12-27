@@ -5,7 +5,7 @@ use cast_client::{MediaConnection, ReceiverConnection, Status};
 use floating_duration::TimeAsFloat;
 use punchtop_audio::chromecast::Device as CastDevice;
 use punchtop_audio::Track;
-use punchtop_playlist::fs::{FsTrack, Playlist};
+use punchtop_playlist::fs::{self, Playlist};
 use serde_derive::Serialize;
 use stream_util::{self, Trigger, Valve};
 
@@ -80,7 +80,7 @@ impl Controller {
 
 // Playback controls
 impl Controller {
-    fn load_next(&mut self) -> Option<(u64, FsTrack)> {
+    fn load_next(&mut self) -> Option<(u64, fs::Track)> {
         let client = self.state.client.as_ref()?;
         let connect = self.state.connect.as_ref()?;
         self.state.playlist.next().map(|(cursor, track)| {
@@ -171,7 +171,7 @@ impl Controller {
     }
 }
 
-fn media(track: &FsTrack, cursor: u64) -> Media {
+fn media(track: &fs::Track, cursor: u64) -> Media {
     let cover = track.cover().map(|image| {
         let mime = image.mime;
         let bytes = base64::encode_config(&image.bytes, base64::URL_SAFE);

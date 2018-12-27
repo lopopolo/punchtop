@@ -64,9 +64,9 @@ pub struct Responder {
 
 impl Responder {
     pub fn new(
-        connect: RwLock<ConnectState>,
-        command: UnboundedSender<Command>,
-        status: UnboundedSender<Status>,
+        connect: &RwLock<ConnectState>,
+        command: &UnboundedSender<Command>,
+        status: &UnboundedSender<Status>,
     ) -> Self {
         Self {
             connection: connection::Handler,

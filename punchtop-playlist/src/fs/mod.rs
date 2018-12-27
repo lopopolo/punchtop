@@ -9,7 +9,7 @@ use std::time::Duration;
 use std::vec::Vec;
 
 use mp4parse::{MediaContext, TrackScaledTime, TrackTimeScale};
-use punchtop_audio::{Image, Tags, Track};
+use punchtop_audio::{self, Image, Tags};
 use rand::distributions::Alphanumeric;
 use rand::seq::SliceRandom;
 use rand::{self, Rng};
@@ -38,7 +38,7 @@ pub fn playlist(root: &Path, name: &str, duration: Duration, iterations: u64) ->
         .into_iter()
         .filter_map(|path| {
             if is_audio_media(&path) && is_sufficient_duration(&path, duration) {
-                Some(FsTrack::new(path))
+                Some(Track::new(path))
             } else {
                 None
             }
@@ -110,12 +110,12 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
 }
 
 #[derive(Clone, Debug)]
-pub struct FsTrack {
+pub struct Track {
     path: PathBuf,
     id: String,
 }
 
-impl FsTrack {
+impl Track {
     pub fn new(path: PathBuf) -> Self {
         let mut rng = rand::thread_rng();
         let id = iter::repeat(())
@@ -126,7 +126,7 @@ impl FsTrack {
     }
 }
 
-impl Track for FsTrack {
+impl punchtop_audio::Track for Track {
     fn id(&self) -> &str {
         &self.id
     }
@@ -167,7 +167,7 @@ impl Track for FsTrack {
 #[derive(Debug)]
 pub struct Playlist {
     name: String,
-    tracks: VecDeque<FsTrack>,
+    tracks: VecDeque<Track>,
     iterations: u64,
     cursor: u64,
 }
@@ -177,10 +177,10 @@ impl Playlist {
         &self.name
     }
 
-    pub fn registry(&self) -> HashMap<String, Box<dyn Track + Send + Sync>> {
+    pub fn registry(&self) -> HashMap<String, Box<dyn punchtop_audio::Track + Send + Sync>> {
         let mut registry = HashMap::new();
         for track in &self.tracks {
-            let track: Box<dyn Track + Send + Sync> = Box::new(track.clone());
+            let track: Box<dyn punchtop_audio::Track + Send + Sync> = Box::new(track.clone());
             registry.insert(track.id().to_owned(), track);
         }
         registry
@@ -188,7 +188,7 @@ impl Playlist {
 }
 
 impl Iterator for Playlist {
-    type Item = (u64, FsTrack);
+    type Item = (u64, Track);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor >= self.iterations {
