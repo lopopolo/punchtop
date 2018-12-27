@@ -6,7 +6,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
 
-use rand::{thread_rng, RngCore};
+use rand::{self, RngCore};
 use rocket::config::{Config, Environment};
 use rocket::response::Stream;
 use rocket::{get, routes, uri, State};
@@ -117,6 +117,6 @@ fn get_available_port(addr: SocketAddr) -> Result<SocketAddr, Error> {
 fn generate_secret_key() -> String {
     // Rocket secret keys are 256 bits
     let mut data = [0; 32];
-    thread_rng().fill_bytes(&mut data);
+    rand::thread_rng().fill_bytes(&mut data);
     base64::encode(&data)
 }

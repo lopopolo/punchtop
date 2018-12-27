@@ -13,7 +13,7 @@ use neguse_taglib::{get_front_cover, get_tags};
 use punchtop_audio::{Image, Tags, Track};
 use rand::distributions::Alphanumeric;
 use rand::seq::SliceRandom;
-use rand::{thread_rng, Rng};
+use rand::{self, Rng};
 use walkdir::WalkDir;
 
 pub mod dir;
@@ -32,7 +32,7 @@ pub fn playlist(root: &Path, name: &str, duration: Duration, iterations: u64) ->
         vec.push(PathBuf::from(entry.path()));
     }
 
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
     vec.shuffle(&mut rng);
 
     let playlist: Vec<_> = vec
@@ -118,7 +118,7 @@ pub struct FsTrack {
 
 impl FsTrack {
     pub fn new(path: PathBuf) -> Self {
-        let mut rng = thread_rng();
+        let mut rng = rand::thread_rng();
         let id = iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .take(8)
