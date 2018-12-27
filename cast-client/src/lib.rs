@@ -7,7 +7,7 @@ use std::io;
 use std::net::SocketAddr;
 
 use futures::prelude::*;
-use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use futures::{future, Future, Stream};
 use futures_locks::RwLock;
 use stream_util::{self, Drainable, Trigger};
@@ -115,8 +115,8 @@ pub fn connect(
     UnboundedReceiver<Status>,
     impl Future<Item = (), Error = ()>,
 ) {
-    let (command_tx, command_rx) = unbounded();
-    let (status_tx, status_rx) = unbounded();
+    let (command_tx, command_rx) = mpsc::unbounded();
+    let (status_tx, status_rx) = mpsc::unbounded();
 
     let (trigger, valve) = stream_util::valve();
 
