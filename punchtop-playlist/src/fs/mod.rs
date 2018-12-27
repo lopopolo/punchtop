@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::iter;
-use std::panic::catch_unwind;
+use std::panic;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::vec::Vec;
@@ -68,7 +68,7 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
     let mime: &str = &tree_magic::from_filepath(path);
     match mime {
         "audio/mpeg" | "audio/mp3" => {
-            let ok = catch_unwind(|| {
+            let ok = panic::catch_unwind(|| {
                 mp3_duration::from_path(path)
                     .ok()
                     .and_then(|duration| duration.checked_sub(required_duration))
