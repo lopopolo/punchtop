@@ -9,7 +9,6 @@ use std::time::Duration;
 use std::vec::Vec;
 
 use mp4parse::{MediaContext, TrackScaledTime, TrackTimeScale};
-use neguse_taglib::{get_front_cover, get_tags};
 use punchtop_audio::{Image, Tags, Track};
 use rand::distributions::Alphanumeric;
 use rand::seq::SliceRandom;
@@ -133,7 +132,7 @@ impl Track for FsTrack {
     }
 
     fn tags(&self) -> Option<Tags> {
-        let tags = get_tags(&self.path).ok()?;
+        let tags = neguse_taglib::get_tags(&self.path).ok()?;
         Some(Tags {
             artist: tags.artist.to_option(),
             title: tags.title.to_option(),
@@ -142,7 +141,7 @@ impl Track for FsTrack {
     }
 
     fn cover(&self) -> Option<Image> {
-        let cover = get_front_cover(&self.path)
+        let cover = neguse_taglib::get_front_cover(&self.path)
             .ok()
             .filter(|img| img.is_some())?;
         let mime = cover.mime();
