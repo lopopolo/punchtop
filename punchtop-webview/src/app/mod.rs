@@ -76,10 +76,6 @@ impl Controller {
     pub fn view_did_load(&mut self) {
         self.lifecycle = Lifecycle::Loaded;
     }
-
-    pub fn view_lifecycle(&self) -> &Lifecycle {
-        &self.lifecycle
-    }
 }
 
 // Playback controls
@@ -194,7 +190,7 @@ fn media(track: &FsTrack, cursor: u64) -> Media {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 #[allow(dead_code)]
 pub enum Event {
@@ -219,7 +215,7 @@ pub enum Event {
     TogglePlayback,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct Media {
     id: String,
     cursor: u64,
@@ -228,7 +224,7 @@ pub struct Media {
     cover: Option<Image>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct Image {
     url: String,
     height: u32,

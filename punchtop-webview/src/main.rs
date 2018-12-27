@@ -5,6 +5,7 @@
 #[macro_use]
 extern crate log;
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -20,16 +21,16 @@ use web_view::*;
 
 mod app;
 
-use crate::app::{Config, Controller, Event, Lifecycle};
+use crate::app::{Config, Controller, Event};
 
 const CAST: &str = "Kitchen Speaker";
 
 fn main() {
     env_logger::init();
-    let mut rt = Runtime::new().unwrap();
+    let mut rt = Runtime::new().expect("tokio runtime");
     let config = Config {
         duration: Duration::new(60, 0),
-        iterations: 5,
+        iterations: 1,
     };
     let player = devices().find(|p| p.name == CAST);
     let player = if let Some(player) = player {
@@ -38,7 +39,13 @@ fn main() {
         eprintln!("Could not find chromecast named {}", CAST);
         ::std::process::exit(1);
     };
-    let playlist = fs::music::new(config.duration, config.iterations).unwrap();
+    let playlist = fs::dir::new(
+        Path::new("/Users/lopopolo/Downloads/test"),
+        config.duration,
+        config.iterations,
+    )
+    .or_else(|| fs::music::new(config.duration, config.iterations))
+    .expect("playlist");
     let (client, chan, connect) = match Device::connect(&player, playlist.registry()) {
         Ok(connect) => connect,
         Err(err) => {
@@ -88,7 +95,7 @@ fn main() {
             Ok(())
         })
         .build()
-        .unwrap();
+        .expect("build webview");
     webview.set_color((15, 55, 55));
     let ui_handle = webview.handle();
     let play_loop = chan.drain(valve).for_each(move |event| {
@@ -96,30 +103,21 @@ fn main() {
         for event in controller.handle(event) {
             let _ = ui_handle.dispatch(move |webview| {
                 dispatch_in_webview(webview, &event);
+                if event == Event::Shutdown {
+                    webview.terminate();
+                    debug!("webview terminated");
+                }
                 Ok(())
             });
         }
         Ok(())
     });
+    debug!("spawn tokio runloop");
     rt.spawn(play_loop);
-    loop {
-        match webview.step() {
-            Some(Ok(_)) => (),
-            Some(Err(e)) => warn!("Error in webview runloop: {:?}", e),
-            None => break,
-        }
-        let shutdown = controller.lock().ok().map_or(false, |controller| {
-            controller.view_lifecycle() == &Lifecycle::Terminating
-        });
-        if shutdown {
-            debug!("Shutting down webview runloop");
-            break;
-        }
-    }
+    debug!("spawn webivew runloop");
+    webview.run().expect("webview runloop");
     debug!("webview runloop completed");
-    webview.terminate();
-    debug!("webview terminated");
-    rt.shutdown_on_idle().wait().unwrap();
+    rt.shutdown_on_idle().wait().expect("tokio");
     debug!("tokio runloop completed");
 }
 
