@@ -5,7 +5,6 @@ use futures::sync::mpsc::UnboundedSender;
 use futures_locks::RwLock;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::{from_str, to_string};
 
 use crate::proto::{CastMessage, CastMessage_PayloadType, CastMessage_ProtocolVersion};
 use crate::{Command, ConnectState, Status};
@@ -50,8 +49,7 @@ pub trait Handler {
             return Ok(None);
         }
         trace!("found message for {} channel", self.channel());
-        let payload =
-            from_str::<Self::Payload>(message.get_payload_utf8()).map_err(|_| Error::Parse)?;
+        let payload = serde_json::from_str(message.get_payload_utf8()).map_err(|_| Error::Parse)?;
         self.handle(payload).map(Some)
     }
 }
@@ -117,7 +115,7 @@ impl<'a> MessageBuilder<'a> {
     }
 
     pub fn payload<T: Serialize>(mut self, payload: &T) -> Self {
-        if let Ok(payload) = to_string(payload) {
+        if let Ok(payload) = serde_json::to_string(payload) {
             self.payload = Some(payload);
         }
         self

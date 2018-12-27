@@ -14,7 +14,6 @@ use futures::prelude::*;
 use futures::Stream;
 use punchtop_audio::chromecast::{devices, Device};
 use punchtop_playlist::fs;
-use serde_json::to_string;
 use stream_util::Drainable;
 use tokio::runtime::Runtime;
 use web_view::*;
@@ -122,7 +121,7 @@ fn main() {
 }
 
 fn dispatch_in_webview(webview: &mut WebView<()>, event: &Event) {
-    let eval = to_string(event).map(|json| {
+    let eval = serde_json::to_string(event).map(|json| {
         let eval = format!("store.dispatch({})", json);
         webview.eval(&eval)
     });

@@ -292,9 +292,9 @@ impl<S> Cancelable for S where S: Stream {}
 
 #[cfg(test)]
 mod tests {
+    use crate::{self as stream_util, Cancelable, Drainable};
     use futures::sync::mpsc;
     use futures::{Future, Stream};
-    use crate::{self as stream_util, Cancelable, Drainable};
 
     #[test]
     fn terminate_drains_receiver() {
