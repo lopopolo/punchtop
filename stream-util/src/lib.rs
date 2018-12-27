@@ -37,10 +37,10 @@
 //! ```rust
 //! use std::thread;
 //! use futures::{Future, Stream};
-//! use stream_util::{valve, Drainable};
+//! use stream_util::{self, Drainable};
 //! use futures::sync::mpsc;
 //!
-//! let (trigger, valve) = valve();
+//! let (trigger, valve) = stream_util::valve();
 //! let (sender, receiver) = mpsc::unbounded::<()>();
 //!
 //! sender.unbounded_send(()).unwrap();
@@ -81,10 +81,10 @@
 //! use std::thread;
 //! use std::time::Duration;
 //! use futures::{Future, Stream};
-//! use stream_util::{valve, Cancelable};
+//! use stream_util::{self, Cancelable};
 //! use tokio::timer::Interval;
 //!
-//! let (trigger, valve) = valve();
+//! let (trigger, valve) = stream_util::valve();
 //! let interval = thread::spawn(move || {
 //!     let task = Interval::new_interval(Duration::from_millis(250))
 //!         .cancel(valve)
@@ -292,9 +292,9 @@ impl<S> Cancelable for S where S: Stream {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use futures::sync::mpsc;
-    use futures::Future;
+    use futures::{Future, Stream};
+    use crate::{self as stream_util, Cancelable, Drainable};
 
     #[test]
     fn terminate_drains_receiver() {
@@ -302,7 +302,7 @@ mod tests {
         use std::sync::Arc;
         use std::thread;
 
-        let (trigger, valve) = valve();
+        let (trigger, valve) = stream_util::valve();
         let (sender, receiver) = mpsc::unbounded::<()>();
 
         let counter = Arc::new(AtomicUsize::new(0));
@@ -340,7 +340,7 @@ mod tests {
 
         let valve = {
             // Drop the trigger by letting it fall out of scope.
-            let (_trigger, valve) = valve();
+            let (_trigger, valve) = stream_util::valve();
             valve
         };
         let (sender, receiver) = mpsc::unbounded::<()>();
@@ -375,7 +375,7 @@ mod tests {
         use std::sync::Arc;
         use std::thread;
 
-        let (trigger, valve) = valve();
+        let (trigger, valve) = stream_util::valve();
         let (mut sender, receiver) = mpsc::channel::<()>(1);
 
         let counter = Arc::new(AtomicUsize::new(0));
@@ -412,7 +412,7 @@ mod tests {
         use std::time::Duration;
         use tokio::timer::Interval;
 
-        let (trigger, valve) = valve();
+        let (trigger, valve) = stream_util::valve();
         let interval = thread::spawn(move || {
             let task = Interval::new_interval(Duration::from_millis(250))
                 .cancel(valve)
@@ -441,7 +441,7 @@ mod tests {
 
         let valve = {
             // Drop the trigger by letting it fall out of scope.
-            let (_trigger, valve) = valve();
+            let (_trigger, valve) = stream_util::valve();
             valve
         };
         let interval = thread::spawn(move || {
@@ -468,7 +468,7 @@ mod tests {
         use std::sync::Arc;
         use std::thread;
 
-        let (trigger, valve) = valve();
+        let (trigger, valve) = stream_util::valve();
         let (sender, receiver) = mpsc::unbounded::<()>();
 
         let counter = Arc::new(AtomicUsize::new(0));

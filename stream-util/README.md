@@ -29,10 +29,10 @@ messages from the channel after it has been canceled.
 ```rust
 use std::thread;
 use futures::{Future, Stream};
-use stream_util::{valve, Drainable};
+use stream_util::{self, Drainable};
 use futures::sync::mpsc;
 
-let (trigger, valve) = valve();
+let (trigger, valve) = stream_util::valve();
 let (sender, receiver) = mpsc::unbounded::<()>();
 
 sender.unbounded_send(()).unwrap();
@@ -71,10 +71,10 @@ cancels it.
 use std::thread;
 use std::time::Duration;
 use futures::{Future, Stream};
-use stream_util::{valve, Cancelable};
+use stream_util::{self, Cancelable};
 use tokio::timer::Interval;
 
-let (trigger, valve) = valve();
+let (trigger, valve) = stream_util::valve();
 let interval = thread::spawn(move || {
     let task = Interval::new_interval(Duration::from_millis(250))
         .cancel(valve)
