@@ -291,7 +291,7 @@ pub fn load(request_id: i64, connect: &ReceiverConnection, media: Media) -> Cast
         artist: media.artist,
         album_name: media.album,
         images,
-        .. Metadata::music_default()
+        ..Metadata::music_default()
     };
     let media = MediaInformation {
         content_id: media.url.to_string(),
