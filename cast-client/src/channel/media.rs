@@ -278,17 +278,21 @@ pub enum IdleReason {
 }
 
 pub fn load(request_id: i64, connect: &ReceiverConnection, media: Media) -> CastMessage {
-    let mut metadata = Metadata::music_default();
-    metadata.title = media.title;
-    metadata.artist = media.artist;
-    metadata.album_name = media.album;
+    let mut images = Vec::with_capacity(1);
     if let Some(image) = media.cover {
-        metadata.images.push(Image {
+        images.push(Image {
             url: image.url.to_string(),
             width: Some(image.dimensions.0),
             height: Some(image.dimensions.1),
         });
     }
+    let metadata = Metadata {
+        title: media.title,
+        artist: media.artist,
+        album_name: media.album,
+        images,
+        .. Metadata::music_default()
+    };
     let media = MediaInformation {
         content_id: media.url.to_string(),
         stream_type: StreamType::None, // let the device decide whether to buffer
