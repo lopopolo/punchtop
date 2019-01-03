@@ -23,6 +23,7 @@ mod app;
 use crate::app::{Config, Controller, Event};
 
 const CAST: &str = "Kitchen Speaker";
+const WEBVIEW_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 
 fn main() {
     env_logger::init();
@@ -61,12 +62,10 @@ fn main() {
     let io_controller = Arc::clone(&controller);
     let mut webview = web_view::builder()
         .title("Punchtop")
-        .content(Content::Html(include_str!(
-            "../../punchtop-react/target/release/index.html"
-        )))
+        .content(Content::Html(WEBVIEW_HTML))
         .size(480, 720)
         .resizable(false)
-        .debug(true)
+        .debug(false)
         .user_data(())
         .invoke_handler(move |webview, arg| {
             let mut controller = handler_controller.lock().map_err(|_| Error::Dispatch)?;
