@@ -37,5 +37,6 @@ RUST_BACKTRACE=1 RUST_LOG=cast-client=debug,punchtop=debug,rocket=info caffeinat
 
 ## Screenshots
 
-<img alt="Punchtop player and playback controls" height=300" src="doc/player.png?raw=true"/>
-
+<p align="center">
+  <img alt="Punchtop player and playback controls" height=600" src="doc/player.png" />
+</p>
