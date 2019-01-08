@@ -37,4 +37,4 @@ RUST_BACKTRACE=1 RUST_LOG=cast-client=debug,punchtop=debug,rocket=info caffeinat
 
 ## Screenshots
 
-![Punchtop player](doc/player.png | height=250)
+![Punchtop player](doc/player.png | width=250)
