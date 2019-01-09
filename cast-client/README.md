@@ -298,7 +298,7 @@ _Google Cast developer docs_:
 ```json
 {
   "requestId": 17130378735599745281,
-  "status: [
+  "status": [
     {
       "mediaSessionId": 4781177872522835899,
       "media": {
@@ -491,11 +491,11 @@ is left unmodified.
   "type": "RECEIVER_STATUS",
   "requestId": 18205553929436936635,
   "status": {
-    "applications" [
+    "applications": [
       {
         "appId": "CC1AD845",
         "displayName": "Default Media Receiver",
-        "namespaces" [
+        "namespaces": [
           "urn:x-cast:com.google.cast.tp.connection",
           "urn:x-cast:com.google.cast.tp.heartbeat",
           "urn:x-cast:com.google.cast.media",
@@ -505,7 +505,7 @@ is left unmodified.
         "statusText": "Playing",
         "transportId": "505EE05E-EB09-4030-A1CD-462CE256E7CB"
       }
-    ],
+    ]
   }
 }
 ```
