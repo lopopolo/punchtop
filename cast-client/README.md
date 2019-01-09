@@ -160,7 +160,7 @@ The device responds to this message with a `MEDIA_STATUS` object.
 The `mediaSessionId` field is optional; the field should be omitted from the
 encoded JSON if there is no media session.
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `GET_STATUS`:
 <https://developers.google.com/cast/docs/reference/messages#GetStatus>
@@ -193,7 +193,7 @@ _Google Cast developer docs_:
 
 Valid values for `streamType` are: `NONE`, `BUFFERED`, `LIVE`.
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `LOAD`: <https://developers.google.com/cast/docs/reference/messages#Load>
 `MediaInformation`:
@@ -221,7 +221,7 @@ verify playback state has been changed.
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `PLAY`: <https://developers.google.com/cast/docs/reference/messages#Play>
 
@@ -241,7 +241,7 @@ verify playback state has been changed.
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `PAUSE`: <https://developers.google.com/cast/docs/reference/messages#Pause>
 
@@ -261,7 +261,7 @@ verify playback state has been changed.
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `STOP`: <https://developers.google.com/cast/docs/reference/messages#Stop>
 
@@ -285,7 +285,7 @@ verify playback position has been changed.
 
 Valid values for `resumeState` are: `PLAYBACK_START`, `PLAYBACK_PAUSE`.
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `SEEK`: <https://developers.google.com/cast/docs/reference/messages#Seek>
 
@@ -333,7 +333,7 @@ Valid values for `playerState` are: `IDLE`, `PLAYING`, `BUFFERING`, `PAUSED`.
 32  Skip backward
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 Media Status:
 <https://developers.google.com/cast/docs/reference/messages#MediaStatus>
@@ -351,7 +351,7 @@ request was received.
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `LOAD_CANCELLED`:
 <https://developers.google.com/cast/docs/reference/messages#LoadCancelled>
@@ -369,7 +369,7 @@ _Google Cast developer docs_:
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `LOAD_FAILED`:
 <https://developers.google.com/cast/docs/reference/messages#LoadFailed>
@@ -388,7 +388,7 @@ is loaded).
 }
 ```
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `INVALID_PLAYER_STATE`:
 <https://developers.google.com/cast/docs/reference/messages#InvalidPlayerState>
@@ -409,7 +409,7 @@ completed.
 
 Valid values for `reason` are: `INVALID_COMMAND`, `DUPLICATE_REQUEST_ID`.
 
-_Google Cast developer docs_:
+**Google Cast developer docs**:
 
 `INVALID_REQUEST`:
 <https://developers.google.com/cast/docs/reference/messages#InvalidRequest>
