@@ -143,7 +143,7 @@ pub enum Request<CustomData: serde::Serialize> {
         volume: Volume,
         #[serde(skip_serializing_if = "Option::is_none")]
         custom_data: Option<CustomData>,
-    }
+    },
 }
 
 #[derive(Deserialize, Debug)]
@@ -322,7 +322,7 @@ pub fn load(request_id: i64, connect: &ReceiverConnection, media: Media) -> Cast
         stream_type: StreamType::None, // let the device decide whether to buffer
         content_type: media.content_type,
         metadata: Some(metadata),
-        duration: None,
+        duration: media.duration,
     };
     let payload: Request<()> = Request::Load {
         request_id,

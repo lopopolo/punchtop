@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use cast_client::{self, Client, Image, Media, MediaConnection, ReceiverConnection, Status};
+use floating_duration::TimeAsFloat;
 use futures::sync::mpsc::UnboundedReceiver;
 use futures::Future;
 use mdns::RecordKind;
@@ -111,6 +112,7 @@ impl Device {
             url,
             cover,
             content_type: track.content_type(),
+            duration: Some(track.duration().as_fractional_secs()),
         })
     }
 }

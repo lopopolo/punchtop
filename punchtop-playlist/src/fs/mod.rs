@@ -38,7 +38,7 @@ pub fn playlist(root: &Path, name: &str, duration: Duration, iterations: u64) ->
         .into_iter()
         .filter_map(|path| {
             if is_audio_media(&path) && is_sufficient_duration(&path, duration) {
-                Some(Track::new(path))
+                Some(Track::new(path, duration))
             } else {
                 None
             }
@@ -113,22 +113,27 @@ fn is_sufficient_duration(path: &Path, required_duration: Duration) -> bool {
 pub struct Track {
     path: PathBuf,
     id: String,
+    duration: Duration,
 }
 
 impl Track {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, duration: Duration) -> Self {
         let mut rng = rand::thread_rng();
         let id = iter::repeat(())
             .map(|()| rng.sample(Alphanumeric))
             .take(8)
             .collect();
-        Self { path, id }
+        Self { path, id, duration }
     }
 }
 
 impl punchtop_audio::Track for Track {
     fn id(&self) -> &str {
         &self.id
+    }
+
+    fn duration(&self) -> Duration {
+        self.duration
     }
 
     fn tags(&self) -> Option<Tags> {

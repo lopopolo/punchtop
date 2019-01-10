@@ -5,6 +5,7 @@
 extern crate log;
 
 use std::io::Read;
+use std::time::Duration;
 
 pub mod chromecast;
 
@@ -33,6 +34,8 @@ pub struct Image {
 
 pub trait Track {
     fn id(&self) -> &str;
+
+    fn duration(&self) -> Duration;
 
     fn tags(&self) -> Option<Tags>;
 

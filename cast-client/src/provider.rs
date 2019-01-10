@@ -13,6 +13,7 @@ pub struct Media {
     pub url: Url,
     pub cover: Option<Image>,
     pub content_type: String,
+    pub duration: Option<f64>,
 }
 
 impl fmt::Display for Media {

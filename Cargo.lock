@@ -923,6 +923,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cast-client 0.1.0",
+ "floating-duration 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "mdns 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
