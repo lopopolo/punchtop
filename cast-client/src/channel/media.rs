@@ -1,6 +1,7 @@
 use futures::sync::mpsc::UnboundedSender;
 use futures::Future;
 use futures_locks::RwLock;
+use serde;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::channel::{self, Error, MessageBuilder, DEFAULT_SENDER_ID};
@@ -79,49 +80,70 @@ impl channel::Handler for Handler {
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 #[allow(clippy::large_enum_variant)]
-pub enum Request {
-    #[serde(rename_all = "camelCase")]
-    GetStatus {
-        request_id: i64,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        media_session_id: Option<i64>,
-    },
+pub enum Request<CustomData: serde::Serialize> {
     #[serde(rename_all = "camelCase")]
     Load {
         request_id: i64,
         session_id: String,
         media: MediaInformation,
-        current_time: f64,
-        custom_data: CustomData,
-        autoplay: bool,
-    },
-    #[serde(rename_all = "camelCase")]
-    Play {
-        request_id: i64,
-        media_session_id: i64,
-        custom_data: CustomData,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        autoplay: Option<bool>, // defaults to true
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_time: Option<f64>, // only optional if content is live content
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
     },
     #[serde(rename_all = "camelCase")]
     Pause {
-        request_id: i64,
         media_session_id: i64,
-        custom_data: CustomData,
-    },
-    #[serde(rename_all = "camelCase")]
-    Stop {
         request_id: i64,
-        media_session_id: i64,
-        custom_data: CustomData,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
     },
     #[serde(rename_all = "camelCase")]
     #[allow(dead_code)]
     Seek {
-        request_id: i64,
         media_session_id: i64,
-        resume_state: Option<ResumeState>,
-        current_time: Option<f64>,
-        custom_data: CustomData,
+        request_id: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        resume_state: Option<ResumeState>, // playback status will not change if not set
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_time: Option<f64>, // optional if the content is live content
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
     },
+    #[serde(rename_all = "camelCase")]
+    Stop {
+        media_session_id: i64,
+        request_id: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Play {
+        media_session_id: i64,
+        request_id: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetStatus {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        media_session_id: Option<i64>,
+        request_id: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
+    },
+    #[serde(rename_all = "camelCase")]
+    #[allow(dead_code)]
+    // Media stream volume (distinct from device volume)
+    Volume {
+        media_session_id: Option<i64>,
+        request_id: i64,
+        volume: Volume,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        custom_data: Option<CustomData>,
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -239,10 +261,12 @@ pub struct Image {
     pub height: Option<u32>,
 }
 
-#[derive(Serialize, Debug, Default)]
-pub struct CustomData {
-    #[serde(skip_serializing)]
-    private: (),
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Volume {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub muted: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -300,13 +324,13 @@ pub fn load(request_id: i64, connect: &ReceiverConnection, media: Media) -> Cast
         metadata: Some(metadata),
         duration: None,
     };
-    let payload = Request::Load {
+    let payload: Request<()> = Request::Load {
         request_id,
         session_id: connect.session.to_owned(),
         media,
-        current_time: 0_f64,
-        custom_data: CustomData::default(),
-        autoplay: true,
+        current_time: None,
+        custom_data: None,
+        autoplay: None,
     };
     MessageBuilder::default()
         .namespace(NAMESPACE)
@@ -317,10 +341,10 @@ pub fn load(request_id: i64, connect: &ReceiverConnection, media: Media) -> Cast
 }
 
 pub fn pause(request_id: i64, connect: &MediaConnection) -> CastMessage {
-    let payload = Request::Pause {
-        request_id,
+    let payload: Request<()> = Request::Pause {
         media_session_id: connect.session,
-        custom_data: CustomData::default(),
+        request_id,
+        custom_data: None,
     };
     MessageBuilder::default()
         .namespace(NAMESPACE)
@@ -331,10 +355,10 @@ pub fn pause(request_id: i64, connect: &MediaConnection) -> CastMessage {
 }
 
 pub fn play(request_id: i64, connect: &MediaConnection) -> CastMessage {
-    let payload = Request::Play {
-        request_id,
+    let payload: Request<()> = Request::Play {
         media_session_id: connect.session,
-        custom_data: CustomData::default(),
+        request_id,
+        custom_data: None,
     };
     MessageBuilder::default()
         .namespace(NAMESPACE)
@@ -345,9 +369,10 @@ pub fn play(request_id: i64, connect: &MediaConnection) -> CastMessage {
 }
 
 pub fn status(request_id: i64, connect: &MediaConnection) -> CastMessage {
-    let payload = Request::GetStatus {
-        request_id,
+    let payload: Request<()> = Request::GetStatus {
         media_session_id: Some(connect.session),
+        request_id,
+        custom_data: None,
     };
     MessageBuilder::default()
         .namespace(NAMESPACE)
@@ -358,10 +383,10 @@ pub fn status(request_id: i64, connect: &MediaConnection) -> CastMessage {
 }
 
 pub fn stop(request_id: i64, connect: &MediaConnection) -> CastMessage {
-    let payload = Request::Stop {
-        request_id,
+    let payload: Request<()> = Request::Stop {
         media_session_id: connect.session,
-        custom_data: CustomData::default(),
+        request_id,
+        custom_data: None,
     };
     MessageBuilder::default()
         .namespace(NAMESPACE)
