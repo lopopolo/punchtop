@@ -185,48 +185,6 @@ Metadata:
 [Music Track](https://developers.google.com/cast/docs/reference/messages#MusicTrackMediaMetadata),
 [Photo](https://developers.google.com/cast/docs/reference/messages#PhotoMediaMetadata).
 
-###### Get Status
-
-**Purpose**: Get playback status.
-
-The device responds to this message with a `MEDIA_STATUS` object.
-
-```json
-{
-  "type": "GET_STATUS",
-  "requestId": 447673,
-  "mediaSessionId": 218277
-}
-```
-
-The `mediaSessionId` field is optional; the field should be omitted from the
-encoded JSON if there is no media session.
-
-**Google Cast developer docs**:
-
-`GET_STATUS`:
-<https://developers.google.com/cast/docs/reference/messages#GetStatus>
-
-###### Play
-
-**Purpose**: Set media playback state to playing.
-
-After sending a `PLAY` message to the receiver, issue a `GET_STATUS` command to
-verify playback state has been changed.
-
-```json
-{
-  "type": "PLAY",
-  "requestId": 447674,
-  "mediaSessionId": 218277,
-  "customData": {}
-}
-```
-
-**Google Cast developer docs**:
-
-`PLAY`: <https://developers.google.com/cast/docs/reference/messages#Play>
-
 ###### Pause
 
 **Purpose**: Set media playback state to paused.
@@ -246,26 +204,6 @@ verify playback state has been changed.
 **Google Cast developer docs**:
 
 `PAUSE`: <https://developers.google.com/cast/docs/reference/messages#Pause>
-
-###### Stop
-
-**Purpose**: Set media playback state to stopped.
-
-After sending a `STOP` message to the receiver, issue a `GET_STATUS` command to
-verify playback state has been changed.
-
-```json
-{
-  "type": "STOP",
-  "requestId": 447676,
-  "mediaSessionId": 218277,
-  "customData": {}
-}
-```
-
-**Google Cast developer docs**:
-
-`STOP`: <https://developers.google.com/cast/docs/reference/messages#Stop>
 
 ###### Seek
 
@@ -290,6 +228,85 @@ Valid values for `resumeState` are: `PLAYBACK_START`, `PLAYBACK_PAUSE`.
 **Google Cast developer docs**:
 
 `SEEK`: <https://developers.google.com/cast/docs/reference/messages#Seek>
+
+###### Stop
+
+**Purpose**: Set media playback state to stopped.
+
+After sending a `STOP` message to the receiver, issue a `GET_STATUS` command to
+verify playback state has been changed.
+
+```json
+{
+  "type": "STOP",
+  "requestId": 447676,
+  "mediaSessionId": 218277,
+  "customData": {}
+}
+```
+
+**Google Cast developer docs**:
+
+`STOP`: <https://developers.google.com/cast/docs/reference/messages#Stop>
+
+###### Play
+
+**Purpose**: Set media playback state to playing.
+
+After sending a `PLAY` message to the receiver, issue a `GET_STATUS` command to
+verify playback state has been changed.
+
+```json
+{
+  "type": "PLAY",
+  "requestId": 447674,
+  "mediaSessionId": 218277,
+  "customData": {}
+}
+```
+
+**Google Cast developer docs**:
+
+`PLAY`: <https://developers.google.com/cast/docs/reference/messages#Play>
+
+###### Get Status
+
+**Purpose**: Get playback status.
+
+The device responds to this message with a `MEDIA_STATUS` object.
+
+```json
+{
+  "type": "GET_STATUS",
+  "requestId": 447673,
+  "mediaSessionId": 218277
+}
+```
+
+The `mediaSessionId` field is optional; the field should be omitted from the
+encoded JSON if there is no media session.
+
+**Google Cast developer docs**:
+
+`GET_STATUS`:
+<https://developers.google.com/cast/docs/reference/messages#GetStatus>
+
+###### Set Volume
+
+**Purpose**: Set the volume of the media stream (e.g. for fade effects).
+
+```json
+{
+  "type": "VOLUME",
+  "volume": {
+    "level": 0.75,
+    "muted": false
+  }
+}
+```
+
+Both fields in the `volume` object are optional. When not provided, the property
+is left unmodified.
 
 ##### Responses
 
