@@ -533,8 +533,7 @@ TLS socket.
 Every `CastMessage` must send a `source` which specifies the sender (client) ID.
 There is a special source for default senders, `sender-0`.
 
-For all messages on all channels, it is sufficient to send the
-`DEFAULT_SENDER_ID`.
+For all messages on all channels, it is sufficient to send `sender-0`.
 
 #### Destination
 
@@ -543,14 +542,11 @@ There is a special destination for messages directed at the receiver,
 `receiver-0`.
 
 - For messages on the connection channel, the `destination` is either the
-  `DEFAULT_DESTINATION_ID` for initial connection or the `transportId` for a
-  launched app.
-- For messages on the heartbeat channel, the `destination` is the
-  `DEFUALT_DESTINATION_ID`.
+  `receiver-0` for initial connection or the `transportId` for a launched app.
+- For messages on the heartbeat channel, the `destination` is the `receiver-0`.
 - For messages on the media channel, the `destination` is the `transportId` of
   the target launched app.
-- For messages on the receiver channel, the `destination` is the
-  `DEFUALT_DESTINATION_ID`.
+- For messages on the receiver channel, the `destination` is the `receiver-0`.
 
 ## Streaming Media to a Device
 
