@@ -555,9 +555,9 @@ There is a special destination for messages directed at the receiver,
 ## Streaming Media to a Device
 
 The `LOAD` command on the media channel loads a media by URL. In order to serve
-media to a Chromecast device, the device must be able to stream it. When
-attempting to play local media (i.e. a song or video on disk), the sender must
-make it accessible to the device by running an embedded media server.
+media to a Chromecast device, the device must be able to stream it over HTTP.
+When attempting to play local media (i.e. a song or video on disk), the sender
+must make it accessible to the device by running an embedded web server.
 
 Make each item in the playlist accessible via a unique URL. This URL only needs
 to be stable during playback of the item.
