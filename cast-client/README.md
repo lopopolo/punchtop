@@ -176,7 +176,7 @@ Valid values for `streamType` are: `NONE`, `BUFFERED`, `LIVE`.
 
 `LOAD`: <https://developers.google.com/cast/docs/reference/messages#Load>  
 `MediaInformation`:
-<https://developers.google.com/cast/docs/reference/messages#MediaInformation>
+<https://developers.google.com/cast/docs/reference/messages#MediaInformation>  
 Metadata:
 [Generic](https://developers.google.com/cast/docs/reference/messages#GenericMediaMetadata),
 [Movie](https://developers.google.com/cast/docs/reference/messages#MovieMediaMetadata),
