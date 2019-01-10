@@ -43,10 +43,6 @@ device. Request IDs may not be reused and should monotonically increase. When a
 payload generates a response from the receiver, the same request ID will be
 echoed back in the response.
 
-#### broadcast
-
-Unknown purpose.
-
 #### connection
 
 The connection channel is a transport channel used to manage connections to
@@ -515,6 +511,10 @@ is left unmodified.
   }
 }
 ```
+
+#### broadcast
+
+Unknown purpose.
 
 ### Cast Transport and Session
 
