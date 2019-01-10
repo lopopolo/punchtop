@@ -503,7 +503,7 @@ is left unmodified.
           "urn:x-cast:com.google.cast.receiver"
         ],
         "sessionId": "3E8F3FEF-C420-42E3-A3AC-1FB4EFC2E0CD",
-        "statusText": "Playing",
+        "statusText": "Lorem ipsum",
         "transportId": "505EE05E-EB09-4030-A1CD-462CE256E7CB"
       }
     ]
