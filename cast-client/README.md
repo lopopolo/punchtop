@@ -541,12 +541,12 @@ Every `CastMessage` must set a `destination` which specifies the _target app_.
 There is a special destination for messages directed at the receiver,
 `receiver-0`.
 
-- For messages on the connection channel, the `destination` is either the
+- For messages on the connection channel, the `destination` is either
   `receiver-0` for initial connection or the `transportId` for a launched app.
-- For messages on the heartbeat channel, the `destination` is the `receiver-0`.
+- For messages on the heartbeat channel, the `destination` is `receiver-0`.
 - For messages on the media channel, the `destination` is the `transportId` of
   the target launched app.
-- For messages on the receiver channel, the `destination` is the `receiver-0`.
+- For messages on the receiver channel, the `destination` is `receiver-0`.
 
 ## Streaming Media to a Device
 
