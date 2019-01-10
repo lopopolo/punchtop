@@ -32,6 +32,7 @@ protobuf. The available namespaces are:
 - `urn:x-cast:com.google.cast.tp.heartbeat`
 - `urn:x-cast:com.google.cast.media`
 - `urn:x-cast:com.google.cast.receiver`
+- `urn:x-cast:com.google.cast.broadcast`
 
 JSON-encoded messages are passed to each channel via the `payload_utf8` field in
 the protobuf.
@@ -41,6 +42,10 @@ request ID. The `0` request ID is reserved for "spontaneous" messages from the
 device. Request IDs may not be reused and should monotonically increase. When a
 payload generates a response from the receiver, the same request ID will be
 echoed back in the response.
+
+#### broadcast
+
+Unknown purpose.
 
 #### connection
 
