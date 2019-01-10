@@ -62,7 +62,7 @@ pub fn respond(
     command: &UnboundedSender<Command>,
     status: &UnboundedSender<Status>,
 ) -> impl Future<Item = (), Error = ()> {
-    let responder = Responder::new(&connect, &command, &status);
+    let responder = Responder::new(connect, command, status);
     source
         .for_each(move |message| {
             if let Err(err) = responder.handle(&message) {
