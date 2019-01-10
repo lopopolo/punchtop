@@ -38,8 +38,9 @@ the protobuf.
 
 JSON payloads for the media and receiver channels are identified by a unique
 request ID. The `0` request ID is reserved for "spontaneous" messages from the
-device. When a payload generates a response from the receiver, the same request
-ID will be echoed back in the response.
+device. Request IDs may not be reused and should monotonically increase. When a
+payload generates a response from the receiver, the same request ID will be
+echoed back in the response.
 
 #### connection
 
@@ -143,28 +144,6 @@ interpreted by a custom
 
 ##### Messages
 
-###### Get Status
-
-**Purpose**: Get playback status.
-
-The device responds to this message with a `MEDIA_STATUS` object.
-
-```json
-{
-  "type": "GET_STATUS",
-  "requestId": 128403142794100773,
-  "mediaSessionId": 8373237555663464450
-}
-```
-
-The `mediaSessionId` field is optional; the field should be omitted from the
-encoded JSON if there is no media session.
-
-**Google Cast developer docs**:
-
-`GET_STATUS`:
-<https://developers.google.com/cast/docs/reference/messages#GetStatus>
-
 ###### Load
 
 **Purpose**: Enqueue media for playback.
@@ -172,8 +151,8 @@ encoded JSON if there is no media session.
 ```json
 {
   "type": "LOAD",
-  "requestId": 2199981871899796657,
-  "sessionId": "505EE05E-EB09-4030-A1CD-462CE256E7CB",
+  "requestId": 447672,
+  "sessionId": "3E8F3FEF-C420-42E3-A3AC-1FB4EFC2E0CD",
   "media": {
     "contentId": "http://www.example.com/song.mp3",
     "streamType": "NONE",
@@ -195,7 +174,7 @@ Valid values for `streamType` are: `NONE`, `BUFFERED`, `LIVE`.
 
 **Google Cast developer docs**:
 
-`LOAD`: <https://developers.google.com/cast/docs/reference/messages#Load>
+`LOAD`: <https://developers.google.com/cast/docs/reference/messages#Load>  
 `MediaInformation`:
 <https://developers.google.com/cast/docs/reference/messages#MediaInformation>
 Metadata:
@@ -204,6 +183,28 @@ Metadata:
 [TV Show](https://developers.google.com/cast/docs/reference/messages#TvShowMediaMetadata),
 [Music Track](https://developers.google.com/cast/docs/reference/messages#MusicTrackMediaMetadata),
 [Photo](https://developers.google.com/cast/docs/reference/messages#PhotoMediaMetadata).
+
+###### Get Status
+
+**Purpose**: Get playback status.
+
+The device responds to this message with a `MEDIA_STATUS` object.
+
+```json
+{
+  "type": "GET_STATUS",
+  "requestId": 447673,
+  "mediaSessionId": 218277
+}
+```
+
+The `mediaSessionId` field is optional; the field should be omitted from the
+encoded JSON if there is no media session.
+
+**Google Cast developer docs**:
+
+`GET_STATUS`:
+<https://developers.google.com/cast/docs/reference/messages#GetStatus>
 
 ###### Play
 
@@ -215,8 +216,8 @@ verify playback state has been changed.
 ```json
 {
   "type": "PLAY",
-  "requestId": 8069653855621172357,
-  "mediaSessionId": 16690720058263264245,
+  "requestId": 447674,
+  "mediaSessionId": 218277,
   "customData": {}
 }
 ```
@@ -235,8 +236,8 @@ verify playback state has been changed.
 ```json
 {
   "type": "PAUSE",
-  "requestId": 8069653855621172357,
-  "mediaSessionId": 16690720058263264245,
+  "requestId": 447675,
+  "mediaSessionId": 218277,
   "customData": {}
 }
 ```
@@ -255,8 +256,8 @@ verify playback state has been changed.
 ```json
 {
   "type": "STOP",
-  "requestId": 6856272176370532247,
-  "mediaSessionId": 1730523897409722602,
+  "requestId": 447676,
+  "mediaSessionId": 218277,
   "customData": {}
 }
 ```
@@ -275,8 +276,8 @@ verify playback position has been changed.
 ```json
 {
   "type": "SEEK",
-  "requestId": 17130378735599745281,
-  "mediaSessionId": 4781177872522835899,
+  "requestId": 447677,
+  "mediaSessionId": 218277,
   "resumeState": "PLAYBACK_START",
   "currentTime": 42.42,
   "customData": {}
@@ -297,10 +298,10 @@ Valid values for `resumeState` are: `PLAYBACK_START`, `PLAYBACK_PAUSE`.
 
 ```json
 {
-  "requestId": 17130378735599745281,
+  "requestId": 447673,
   "status": [
     {
-      "mediaSessionId": 4781177872522835899,
+      "mediaSessionId": 218277,
       "media": {
         "contentId": "http://www.example.com/song.mp3",
         "streamType": "NONE",
@@ -346,7 +347,7 @@ request was received.
 ```json
 {
   "type": "LOAD_CANCELLED",
-  "requestId": 9423939210460905955,
+  "requestId": 447672,
   "customData": {}
 }
 ```
@@ -364,7 +365,7 @@ request was received.
 ```json
 {
   "type": "LOAD_FAILED",
-  "requestId": 10576902510017753157,
+  "requestId": 447672,
   "customData": {}
 }
 ```
@@ -383,7 +384,7 @@ is loaded).
 ```json
 {
   "type": "INVALID_PLAYER_STATE",
-  "requestId": 10364330086991706802,
+  "requestId": 447677,
   "customData": {}
 }
 ```
@@ -401,7 +402,7 @@ completed.
 ```json
 {
   "type": "INVALID_REQUEST",
-  "requestId": 8000646305415193525,
+  "requestId": 105402,
   "reason": "INVALID_COMMAND",
   "customData": {}
 }
@@ -429,7 +430,7 @@ Media is played by an app; you must launch an app before issuing a `LOAD`.
 ```json
 {
   "type": "LAUNCH",
-  "requestId": 10181705186791964602,
+  "requestId": 160135,
   "appId": "CC1AD845"
 }
 ```
@@ -445,7 +446,7 @@ The device responds to this message with a `RECEIVER_STATUS` object.
 ```json
 {
   "type": "GET_STATUS",
-  "requestId": 18205553929436936635
+  "requestId": 160136
 }
 ```
 
@@ -458,7 +459,7 @@ The device responds to this message with a `RECEIVER_STATUS` object.
 ```json
 {
   "type": "GET_APP_AVAILABILITY",
-  "requestId": 16619677927068003483,
+  "requestId": 160137,
   "appId": ["CC1AD845"]
 }
 ```
@@ -489,7 +490,7 @@ is left unmodified.
 ```json
 {
   "type": "RECEIVER_STATUS",
-  "requestId": 18205553929436936635,
+  "requestId": 160136,
   "status": {
     "applications": [
       {
@@ -510,11 +511,17 @@ is left unmodified.
 }
 ```
 
-### Session and Transport
+### Cast Transport and Session
 
 Upon connecting to the device, senders must initiate connections with the apps
 they launch. For messages targeted at a launched app, the `transportId` of the
-app is the `destination`.
+app is the `destination` field in the `CastMessage`.
+
+Commands on the media channel are associated with a particular instance of an
+app or loaded media. For `LOAD` commands, the `sessionId` field in the JSON
+payload is the `sessionId` associated with the launched app. For all other
+commands, the `sessionId` field in the JSON payload is the `mediaSessionId`
+returned from the `LOAD` command.
 
 ### Sender and Receiver Multiplexing
 
