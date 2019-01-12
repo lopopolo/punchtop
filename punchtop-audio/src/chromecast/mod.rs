@@ -153,7 +153,7 @@ pub fn devices() -> Devices {
                 }
                 let name = metadata.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
                 if let (Some(name), Some(addr), Some(port)) = (name, addr, port) {
-                    println!("{:?} {:?} {:?}", name, addr, port);
+                    debug!("found device: name={} addr={} port={}", name, addr, port);
                     devices.insert(CastAddr {
                         name,
                         addr: SocketAddr::new(addr, port),
