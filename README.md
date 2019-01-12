@@ -24,6 +24,12 @@ debug logging via cargo:
 RUST_BACKTRACE=1 RUST_LOG=cast-client=debug,punchtop=debug,rocket=info caffeinate -s cargo run
 ```
 
+or in a release build:
+
+```sh
+RUST_LOG=info caffeinate -s cargo run --release
+```
+
 ## Limitations / Known Bugs
 
 - Media directory may only be selected by modifying the
