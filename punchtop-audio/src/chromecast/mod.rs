@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
 use cast_client::{self, Client, Image, Media, MediaConnection, ReceiverConnection, Status};
@@ -42,6 +42,41 @@ impl Eq for CastAddr {}
 impl Hash for CastAddr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct CastAddrBuilder {
+    name: Option<String>,
+    addr: Option<IpAddr>,
+    port: Option<u16>,
+}
+
+impl CastAddrBuilder {
+    pub fn name(mut self, name: String) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    pub fn addr(mut self, addr: IpAddr) -> Self {
+        self.addr = Some(addr);
+        self
+    }
+
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    pub fn into_castaddr(self) -> Option<CastAddr> {
+        if let (Some(name), Some(addr), Some(port)) = (self.name, self.addr, self.port) {
+            Some(CastAddr {
+                name,
+                addr: SocketAddr::new(addr, port),
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -138,26 +173,25 @@ pub fn devices() -> Devices {
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
         for response in discovery.timeout(DISCOVER_TIMEOUT) {
             if let Ok(response) = response {
-                let mut addr = None;
-                let mut port = None;
-                let mut metadata = HashMap::new();
+                let mut builder = CastAddrBuilder::default();
 
                 for record in response.records() {
-                    match record.kind {
-                        RecordKind::A(v4) => addr = Some(v4.into()),
-                        RecordKind::AAAA(v6) => addr = Some(v6.into()),
-                        RecordKind::SRV { port: p, .. } => port = Some(p),
-                        RecordKind::TXT(ref text) => metadata.extend(parser::dns_txt(text)),
-                        _ => (),
+                    builder = match record.kind {
+                        RecordKind::A(v4) => builder.addr(v4.into()),
+                        RecordKind::AAAA(v6) => builder.addr(v6.into()),
+                        RecordKind::SRV { port: p, .. } => builder.port(p),
+                        RecordKind::TXT(ref text) => {
+                            if let Some(name) = parser::dns_txt(text).get(CHROMECAST_NAME_KEY) {
+                                builder = builder.name(name.to_owned())
+                            }
+                            builder
+                        }
+                        _ => builder,
                     }
                 }
-                let name = metadata.get(CHROMECAST_NAME_KEY).map(|s| s.to_string());
-                if let (Some(name), Some(addr), Some(port)) = (name, addr, port) {
-                    debug!("found device: name={} addr={} port={}", name, addr, port);
-                    devices.insert(CastAddr {
-                        name,
-                        addr: SocketAddr::new(addr, port),
-                    });
+                if let Some(cast) = builder.into_castaddr() {
+                    debug!("found device: name={} addr={}", cast.name, cast.addr);
+                    devices.insert(cast);
                 }
             }
         }
