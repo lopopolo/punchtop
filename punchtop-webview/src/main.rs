@@ -22,7 +22,7 @@ mod app;
 
 use crate::app::{Config, Controller, Event};
 
-const CAST: &str = "Kitchen Speaker";
+const CAST: &str = "TV";
 const WEBVIEW_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 
 fn main() {
@@ -30,7 +30,7 @@ fn main() {
     let mut rt = Runtime::new().expect("tokio runtime");
     let config = Config {
         duration: Duration::new(60, 0),
-        iterations: 1,
+        iterations: 60,
     };
     let player = devices().find(|p| p.name == CAST);
     let player = if let Some(player) = player {
@@ -40,7 +40,7 @@ fn main() {
         ::std::process::exit(1);
     };
     let playlist = fs::dir::new(
-        Path::new("/Users/lopopolo/Downloads/test"),
+        Path::new("/Users/lopopolo/Downloads/Party Mix"),
         config.duration,
         config.iterations,
     )
