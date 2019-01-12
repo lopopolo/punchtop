@@ -21,13 +21,14 @@ After you have installed the build dependencies, you can launch punchtop with
 debug logging via cargo:
 
 ```sh
-RUST_BACKTRACE=1 RUST_LOG=cast-client=debug,punchtop=debug,rocket=info caffeinate -s cargo run
+RUST_BACKTRACE=1 RUST_LOG=cast-client=debug,punchtop=debug,rocket=info cargo run
 ```
 
 or in a release build:
 
 ```sh
-RUST_LOG=info caffeinate -s cargo run --release
+cargo build --release
+RUST_LOG=info caffeinate -s ./target/release/punchtop-webview
 ```
 
 ## Limitations / Known Bugs
