@@ -22,7 +22,7 @@ mod app;
 
 use crate::app::{Config, Controller, Event};
 
-const CAST: &str = "TV";
+const CAST: &str = "Kitchen Speaker";
 const WEBVIEW_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 
 fn main() {
