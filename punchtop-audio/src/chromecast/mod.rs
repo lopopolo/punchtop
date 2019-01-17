@@ -69,14 +69,9 @@ impl CastAddrBuilder {
     }
 
     pub fn into_castaddr(self) -> Option<CastAddr> {
-        if let (Some(name), Some(addr), Some(port)) = (self.name, self.addr, self.port) {
-            Some(CastAddr {
-                name,
-                addr: SocketAddr::new(addr, port),
-            })
-        } else {
-            None
-        }
+        let name = self.name?;
+        let addr = SocketAddr::new(self.addr?, self.port?);
+        Some(CastAddr { name, addr })
     }
 }
 
