@@ -26,6 +26,16 @@ fn build_react() {
     .collect();
     let ui_dir = ui_dir.to_str().unwrap();
 
+    if !Command::new("yarn")
+        .current_dir(ui_dir)
+        .args(&["install"])
+        .status()
+        .unwrap()
+        .success()
+    {
+        panic!("Failed to install react deps");
+    }
+
     if Command::new("yarn")
         .current_dir(ui_dir)
         .args(&[
@@ -39,6 +49,6 @@ fn build_react() {
     {
         println!("cargo:rerun-if-changed=\"{}\"", html_input);
     } else {
-        panic!("Failed to create elm");
+        panic!("Failed to create index.html");
     }
 }
