@@ -168,22 +168,23 @@ pub fn devices() -> Devices {
     if let Ok(discovery) = mdns::discover::all(SERVICE_NAME) {
         for response in discovery.timeout(DISCOVER_TIMEOUT) {
             if let Ok(response) = response {
-                let mut builder = CastAddrBuilder::default();
-
-                for record in response.records() {
-                    builder = match record.kind {
-                        RecordKind::A(v4) => builder.addr(v4.into()),
-                        RecordKind::AAAA(v6) => builder.addr(v6.into()),
-                        RecordKind::SRV { port: p, .. } => builder.port(p),
-                        RecordKind::TXT(ref text) => {
-                            if let Some(name) = parser::dns_txt(text).get(CHROMECAST_NAME_KEY) {
-                                builder = builder.name(name.to_owned())
+                let builder =
+                    response
+                        .records()
+                        .fold(CastAddrBuilder::default(), |builder, record| {
+                            match record.kind {
+                                RecordKind::A(v4) => builder.addr(v4.into()),
+                                RecordKind::AAAA(v6) => builder.addr(v6.into()),
+                                RecordKind::SRV { port: p, .. } => builder.port(p),
+                                RecordKind::TXT(ref text) => {
+                                    match parser::dns_txt(text).get(CHROMECAST_NAME_KEY) {
+                                        Some(name) => builder.name(name.to_owned()),
+                                        None => builder,
+                                    }
+                                }
+                                _ => builder,
                             }
-                            builder
-                        }
-                        _ => builder,
-                    }
-                }
+                        });
                 if let Some(cast) = builder.into_castaddr() {
                     debug!("found device: name={} addr={}", cast.name, cast.addr);
                     devices.insert(cast);
