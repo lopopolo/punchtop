@@ -104,10 +104,13 @@ impl CastMessage {
         if src.len() < CAST_MESSAGE_HEADER_LENGTH {
             return None;
         }
-        let header = src.split_to(4);
+        let header = src.split_to(CAST_MESSAGE_HEADER_LENGTH);
         let length = {
-            let mut header = header.into_buf();
-            header.get_u32_be() as usize
+            let mut bytes: [u8; 8] = Default::default();
+            for (i, byte) in header.into_buf().bytes().iter().enumerate() {
+                bytes[i + CAST_MESSAGE_HEADER_LENGTH] = *byte;
+            }
+            usize::from_be_bytes(bytes)
         };
         if length > CAST_MESSAGE_PROTOBUF_MAX_LENGTH {
             panic!("CastMessageCodec decoder received message of length {}, which is larger than the max message length of {}", length, CAST_MESSAGE_PROTOBUF_MAX_LENGTH);
