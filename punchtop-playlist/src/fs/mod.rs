@@ -161,7 +161,7 @@ impl punchtop_audio::Track for Track {
 
     fn stream(&self) -> Option<Box<dyn Read>> {
         let file = File::open(&self.path).ok()?;
-        Some(Box::new(file) as Box<dyn Read>)
+        Some(Box::new(file))
     }
 
     fn content_type(&self) -> String {

@@ -19,10 +19,10 @@ pub fn keepalive(
     Interval::new_interval(Duration::new(5, 0))
         .cancel(valve)
         .map(|_| Command::Ping)
-        .or_else(|err| {
+        .or_else(|err| -> Result<Command, ()> {
             warn!("Error on heartbeat interval: {:?}", err);
             // Attempt to recover from errors on the heartbeat channel
-            Ok(Command::Ping) as Result<Command, ()>
+            Ok(Command::Ping)
         })
         .forward(command.sink_map_err(|err| warn!("Error on sink heartbeat: {:?}", err)))
         .map(|_| ())
