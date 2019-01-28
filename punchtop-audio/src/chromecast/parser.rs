@@ -1,11 +1,11 @@
-///! Parser for Chromecast TXT records.
-///!
-///! Each Chromecast TXT record is a `key=value` pair that specifies some
-///! metadata about the device. There are [several key-value pairs in the record](https://github.com/azasypkin/rust-cast#dns-txt-record-description).
-///! The most relevant ones are:
-///!
-///! - `md` - Model Name
-///! - `fn` - Friendly Name
+//! Parser for Chromecast TXT records.
+//!
+//! Each Chromecast TXT record is a `key=value` pair that specifies some
+//! metadata about the device. There are [several key-value pairs in the record](https://github.com/azasypkin/rust-cast#dns-txt-record-description).
+//! The most relevant ones are:
+//!
+//! - `md` - Model Name
+//! - `fn` - Friendly Name
 use nom::types::CompleteStr;
 use nom::{alphanumeric, call, char, do_parse, named, take_while};
 
@@ -16,7 +16,7 @@ named!(key_value<CompleteStr, (CompleteStr, CompleteStr)>,
 do_parse!(
     key: alphanumeric >>
     char!('=') >>
-    val: take_while!(call!(|_| true)) >>
+    val: take_while!(|_| true) >>
     (key, val)
 )
 );
@@ -35,13 +35,11 @@ pub fn dns_txt<T: AsRef<str>>(vec: &[T]) -> HashMap<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn parse_dns_txt() {
-        let parsed = dns_txt(&vec!["fn=Device Name=Bob's", "md=Chromecast"]);
-        let name = parsed.get("fn").unwrap();
-        let model = parsed.get("md").unwrap();
+        let parsed = super::dns_txt(&["fn=Device Name=Bob's", "md=Chromecast"]);
+        let name = &parsed["fn"];
+        let model = &parsed["md"];
         assert_eq!("Device Name=Bob's", name);
         assert_eq!("Chromecast", model);
         assert_eq!(None, parsed.get("none"));
