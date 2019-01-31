@@ -7,7 +7,7 @@
 //! - `md` - Model Name
 //! - `fn` - Friendly Name
 use nom::types::CompleteStr;
-use nom::{alphanumeric, call, char, do_parse, named, take_while};
+use nom::{alphanumeric, char, do_parse, named, take_while};
 
 use std::collections::HashMap;
 use std::str;
