@@ -12,13 +12,14 @@ use nom::{alphanumeric, char, do_parse, named, take_while};
 use std::collections::HashMap;
 use std::str;
 
-named!(key_value<CompleteStr, (CompleteStr, CompleteStr)>,
-do_parse!(
-    key: alphanumeric >>
-    char!('=') >>
-    val: take_while!(|_| true) >>
-    (key, val)
-)
+named!(
+    key_value<CompleteStr, (CompleteStr, CompleteStr)>,
+    do_parse!(
+        key: alphanumeric >>
+        char!('=') >>
+        val: take_while!(|_| true) >>
+        (key, val)
+    )
 );
 
 /// Extract key-value pairs out of a TXT record and collect them into
