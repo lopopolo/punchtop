@@ -21,7 +21,6 @@ pub const DEFAULT_SENDER_ID: &str = "sender-0";
 #[derive(Debug)]
 pub enum Error {
     CommandSend,
-    NamespaceMismatch,
     Parse,
     StatusSend,
     UnknownPayload,
