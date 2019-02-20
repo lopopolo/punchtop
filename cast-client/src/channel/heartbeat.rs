@@ -46,7 +46,6 @@ impl channel::Handler for Handler {
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Request {
     Ping,
-    #[allow(dead_code)]
     Pong,
 }
 
@@ -71,6 +70,6 @@ pub fn pong() -> CastMessage {
         .namespace(NAMESPACE)
         .source(DEFAULT_SENDER_ID)
         .destination(DEFAULT_DESTINATION_ID)
-        .payload(&Request::Ping)
+        .payload(&Request::Pong)
         .into_message()
 }
