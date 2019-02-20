@@ -1,6 +1,6 @@
 #![deny(missing_docs, warnings)]
 #![doc(test(attr(deny(warnings))))]
-#![warn(clippy::all, clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 // stream-util is based on stream-cancel@0.4.4
 // <https://github.com/jonhoo/stream-cancel>
 //

@@ -1,6 +1,6 @@
 #![feature(inner_deref, try_from)]
 #![feature(proc_macro_hygiene, decl_macro)]
-#![warn(clippy::all, clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 
 #[macro_use]
 extern crate log;
