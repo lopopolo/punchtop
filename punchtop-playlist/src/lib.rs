@@ -1,5 +1,5 @@
 #![feature(try_from)]
-#![warn(clippy::all, clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 
 #[macro_use]
 extern crate log;

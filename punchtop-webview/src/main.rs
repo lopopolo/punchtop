@@ -1,6 +1,6 @@
 #![feature(inner_deref, try_from)]
 #![feature(proc_macro_hygiene, decl_macro)]
-#![warn(clippy::all, clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 
 #[macro_use]
 extern crate log;
@@ -26,7 +26,7 @@ const CAST: &str = "Kitchen Speaker";
 const WEBVIEW_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_env("PUNCHTOP_LOG").init();
     let mut rt = Runtime::new().expect("tokio runtime");
     let config = Config {
         duration: Duration::new(60, 0),
