@@ -36,10 +36,10 @@
 //! messages from the channel after it has been canceled.
 //!
 //! ```rust
-//! use std::thread;
-//! use futures::{Future, Stream};
-//! use stream_util::{self, Drainable};
 //! use futures::sync::mpsc;
+//! use futures::{Future, Stream};
+//! use std::thread;
+//! use stream_util::{self, Drainable};
 //!
 //! let (trigger, valve) = stream_util::valve();
 //! let (sender, receiver) = mpsc::unbounded::<()>();
@@ -79,9 +79,9 @@
 //! and cancels it.
 //!
 //! ```rust
+//! use futures::{Future, Stream};
 //! use std::thread;
 //! use std::time::Duration;
-//! use futures::{Future, Stream};
 //! use stream_util::{self, Cancelable};
 //! use tokio::timer::Interval;
 //!

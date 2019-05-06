@@ -1,4 +1,3 @@
-#![feature(try_from)]
 #![deny(clippy::all, clippy::pedantic)]
 
 #[macro_use]

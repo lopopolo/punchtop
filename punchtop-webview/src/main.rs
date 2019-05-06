@@ -1,4 +1,4 @@
-#![feature(inner_deref, try_from)]
+#![feature(inner_deref)]
 #![feature(proc_macro_hygiene, decl_macro)]
 #![deny(clippy::all, clippy::pedantic)]
 
