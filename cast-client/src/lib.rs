@@ -1,5 +1,6 @@
 #![feature(inner_deref)]
 #![deny(clippy::all, clippy::pedantic)]
+#![deny(warnings)]
 
 #[macro_use]
 extern crate log;
@@ -19,6 +20,7 @@ use tokio_tls::{TlsConnector, TlsStream};
 mod channel;
 mod codec;
 #[allow(clippy::all, clippy::pedantic)]
+#[allow(warnings)]
 mod proto;
 mod provider;
 mod session;
